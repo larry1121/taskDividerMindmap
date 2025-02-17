@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@types/node": "^22.13.4",
+    "ai": "^4.1.41",
+    "ollama-ai-provider": "^1.2.0",
+    "openai": "^4.85.1",
+    "zod": "^3.24.2"
+  }
+}
