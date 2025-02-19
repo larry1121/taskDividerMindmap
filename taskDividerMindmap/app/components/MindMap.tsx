@@ -49,11 +49,21 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import dynamic from 'next/dynamic';
+import 'reactflow/dist/base.css';
 
 interface MindMapProps {
   data: { topic: string; subtopics: Subtopic[] } | null;
   onExpandMap: (nodeId: string) => Promise<void>;
 }
+
+// const ReactFlow = dynamic(
+//   () => import('reactflow').then((mod) => mod.default),
+//   {
+//     ssr: false,
+//     loading: () => <div>Loading...</div>
+//   }
+// );
 
 const NodeContent: React.FC<{
   name: string;
@@ -65,6 +75,7 @@ const NodeContent: React.FC<{
   isRoot: boolean;
   onExpandMap: (nodeId: string) => Promise<void>;
   nodeId: string;
+  onDelete: (nodeId: string) => void;
 }> = ({
   name,
   onClick,
@@ -73,68 +84,84 @@ const NodeContent: React.FC<{
   hasChildren,
   onExpandMap,
   nodeId,
-}) => (
-  <ContextMenu>
-    <ContextMenuTrigger>
-      <div
-        className="p-4 rounded-md shadow-sm transition-all duration-300 ease-in-out cursor-pointer min-w-[12rem] bg-white hover:bg-gray-50 flex items-center justify-between"
-        onClick={onClick}
-      >
-        <div className="text-lg font-bold text-center flex-grow">{name}</div>
-        {hasChildren && (
-          <button
+  onDelete,
+}) => {
+  console.log('NodeContent rendered for:', { name, nodeId });
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger>
+        <div
+          className="p-4 rounded-md shadow-sm transition-all duration-300 ease-in-out cursor-pointer min-w-[12rem] bg-white hover:bg-gray-50 flex items-center justify-between"
+          onClick={onClick}
+        >
+          <div className="text-lg font-bold text-center flex-grow">{name}</div>
+          {hasChildren && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onExpand();
+              }}
+              className="p-2 rounded-full bg-gray-200 hover:bg-gray-300 flex-shrink-0"
+            >
+              {isExpanded ? (
+                <ChevronDown size={20} />
+              ) : (
+                <ChevronRight size={20} />
+              )}
+            </button>
+          )}
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem
+          onClick={(e) => {
+            e.stopPropagation();
+            console.log('Expand Map clicked for node:', { name, nodeId });
+            onExpandMap(nodeId);
+          }}
+        >
+          Expand Map
+        </ContextMenuItem>
+        {!isRoot && (
+          <ContextMenuItem
             onClick={(e) => {
               e.stopPropagation();
-              onExpand();
+              onDelete(nodeId);
             }}
-            className="p-2 rounded-full bg-gray-200 hover:bg-gray-300 flex-shrink-0"
+            className="text-red-600 hover:text-red-700 hover:bg-red-50"
           >
-            {isExpanded ? (
-              <ChevronDown size={20} />
-            ) : (
-              <ChevronRight size={20} />
-            )}
-          </button>
+            Delete Node
+          </ContextMenuItem>
         )}
-      </div>
-    </ContextMenuTrigger>
-    <ContextMenuContent>
-      <ContextMenuItem
-        onClick={(e) => {
-          e.stopPropagation();
-          onExpandMap(nodeId);
-        }}
-      >
-        Expand Map
-      </ContextMenuItem>
-    </ContextMenuContent>
-  </ContextMenu>
-);
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+};
 
 const RootNode: React.FC<NodeProps> = ({ data }) => (
   <div className="border border-blue-400 text-blue-700 bg-white rounded-md shadow-sm">
     <NodeContent {...data} />
-    <Handle type="source" position={Position.Bottom} className="w-2 h-2" />
+    <Handle type="source" position={Position.Right} className="w-2 h-2" />
   </div>
 );
 
 const BranchNode: React.FC<NodeProps> = ({ data }) => (
   <div className="border border-green-400 text-green-700 bg-white rounded-md shadow-sm">
     <NodeContent {...data} />
-    <Handle type="target" position={Position.Top} className="w-2 h-2" />
-    <Handle type="source" position={Position.Bottom} className="w-2 h-2" />
+    <Handle type="target" position={Position.Left} className="w-2 h-2" />
+    <Handle type="source" position={Position.Right} className="w-2 h-2" />
   </div>
 );
 
 const LeafNode: React.FC<NodeProps> = ({ data }) => (
   <div className="border border-yellow-400 text-yellow-700 bg-white rounded-md shadow-sm">
     <NodeContent {...data} />
-    <Handle type="target" position={Position.Top} className="w-2 h-2" />
+    <Handle type="target" position={Position.Left} className="w-2 h-2" />
   </div>
 );
 
 const createNodesAndEdges = (
-  subtopic: Subtopic,
+  data: Subtopic,
   parentId: string | null,
   x: number,
   y: number,
@@ -143,70 +170,72 @@ const createNodesAndEdges = (
   verticalSpacing: number,
   expandedNodes: Set<string>,
   onExpand: (nodeId: string, parentId: string | null) => void
-): { nodes: Node[]; edges: Edge[] } => {
-  const nodeId = `${parentId ? `${parentId}-` : ""}${subtopic.name.replace(
-    /\s+/g,
-    "-"
-  )}`;
-  const nodeType =
-    level === 0
-      ? "root"
-      : subtopic.subtopics && subtopic.subtopics.length > 0
-      ? "branch"
-      : "leaf";
-  const isExpanded = expandedNodes.has(nodeId);
+) => {
+  const nodes: Node[] = [];
+  const edges: Edge[] = [];
+  
+  // 노드 ID 생성
+  const nodeId = parentId 
+    ? `${parentId}-${data.name.replace(/\s+/g, "-")}` 
+    : data.name.replace(/\s+/g, "-");
 
-  const newNode: Node = {
+  // 수평 위치 계산 - 레벨에 따라 간격 증가
+  const xPos = x + (level * horizontalSpacing);
+  
+  // 현재 노드 추가
+  nodes.push({
     id: nodeId,
-    type: nodeType,
-    position: { x, y },
+    type: parentId ? (data.subtopics?.length ? "branch" : "leaf") : "root",
+    position: { x: xPos, y },
     data: {
-      name: subtopic.name,
-      details: subtopic.details,
-      links: subtopic.links,
-      isExpanded,
-      hasChildren: subtopic.subtopics && subtopic.subtopics.length > 0,
-      onExpand: () => onExpand(nodeId, parentId),
-      onClick: () => {},
+      ...data,
       parentId,
-      isRoot: level === 0,
-      nodeId: nodeId,
+      isRoot: !parentId,
+      isExpanded: true,
+      hasChildren: data.subtopics?.length > 0,
+      onClick: () => {},
+      onExpand: () => onExpand(nodeId, parentId),
+      nodeId, // nodeId 추가
     },
-  };
+  });
 
-  let nodes: Node[] = [newNode];
-  let edges: Edge[] = [];
-
+  // 부모 노드와의 엣지 추가
   if (parentId) {
     edges.push({
       id: `${parentId}-${nodeId}`,
       source: parentId,
       target: nodeId,
-      type: "smoothstep",
+      type: "mindmap",
+      animated: true,
     });
   }
 
-  if (isExpanded && subtopic.subtopics && subtopic.subtopics.length > 0) {
-    const childrenCount = subtopic.subtopics.length;
-    const totalWidth = childrenCount * horizontalSpacing;
-    const startX = x - totalWidth / 2 + horizontalSpacing / 2;
+  // 하위 노드들 처리
+  if (data.subtopics && data.subtopics.length > 0) {
+    const childSpacing = verticalSpacing * 2; // 자식 노드 간의 간격
+    const totalChildren = data.subtopics.length;
+    const totalHeight = (totalChildren - 1) * childSpacing;
+    const startY = y - (totalHeight / 2); // 중앙 정렬을 위한 시작 y 위치
 
-    subtopic.subtopics.forEach((childSubtopic: Subtopic, index: number) => {
-      const childX = startX + index * horizontalSpacing;
-      const childY = y + verticalSpacing;
-      const { nodes: childNodes, edges: childEdges } = createNodesAndEdges(
-        childSubtopic,
+    data.subtopics.forEach((subtopic, childIndex) => {
+      const childY = startY + (childIndex * childSpacing);
+      const {
+        nodes: childNodes,
+        edges: childEdges
+      } = createNodesAndEdges(
+        subtopic,
         nodeId,
-        childX,
+        xPos,
         childY,
         level + 1,
         horizontalSpacing,
-        verticalSpacing * 1.2,
+        verticalSpacing,
         expandedNodes,
         onExpand
       );
-      nodes = [...nodes, ...childNodes];
-      edges = [...edges, ...childEdges];
+      
+      nodes.push(...childNodes);
+      edges.push(...childEdges);
     });
   }
 
@@ -214,63 +243,36 @@ const createNodesAndEdges = (
 };
 
 const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
-  const [selectedSubtopic, setSelectedSubtopic] = useState<Subtopic | null>(
-    null
-  );
+  const [selectedSubtopic, setSelectedSubtopic] = useState<Subtopic | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 110);
-
-    return () => clearTimeout(timer);
-  }, []);
-
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     setSelectedSubtopic(node.data as Subtopic);
-    if (node.data.isRoot) return;
+  }, []);
 
+  const handleExpandNode = useCallback((nodeId: string) => {
     setExpandedNodes((prev) => {
       const newSet = new Set(prev);
-      if (newSet.has(node.id)) {
-        newSet.delete(node.id);
-        return newSet;
+      if (newSet.has(nodeId)) {
+        newSet.delete(nodeId);
+      } else {
+        newSet.add(nodeId);
       }
-      newSet.add(node.id);
       return newSet;
     });
   }, []);
 
-  const onInit = useCallback((reactFlowInstance: ReactFlowInstance) => {
-    reactFlowInstance.fitView({ padding: 0.2 });
-  }, []);
+  const handleDeleteNode = useCallback((nodeId: string) => {
+    setNodes((nodes) => nodes.filter((node) => !node.id.startsWith(nodeId)));
+    setEdges((edges) => edges.filter((edge) => !edge.source.startsWith(nodeId) && !edge.target.startsWith(nodeId)));
+  }, [setNodes, setEdges]);
 
   useEffect(() => {
     if (!data) return;
-
-    const onExpand = (nodeId: string, parentId: string | null) => {
-      setExpandedNodes((prev) => {
-        const newSet = new Set(prev);
-        if (newSet.has(nodeId)) {
-          newSet.delete(nodeId);
-        } else {
-          if (parentId) {
-            nodes.forEach((node) => {
-              if (node.data.parentId === parentId && node.id !== nodeId) {
-                newSet.delete(node.id);
-              }
-            });
-          }
-          newSet.add(nodeId);
-        }
-        return newSet;
-      });
-    };
 
     const { nodes: newNodes, edges: newEdges } = createNodesAndEdges(
       { name: data.topic, details: "", links: [], subtopics: data.subtopics },
@@ -279,9 +281,9 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
       0,
       0,
       300,
-      150,
+      200,
       expandedNodes,
-      onExpand
+      handleExpandNode
     );
 
     setNodes(
@@ -290,12 +292,15 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
         data: {
           ...node.data,
           onClick: () => onNodeClick({} as React.MouseEvent, node),
+          onExpand: () => handleExpandNode(node.id),
           onExpandMap: () => onExpandMap(node.id),
+          onDelete: handleDeleteNode,
+          isExpanded: expandedNodes.has(node.id),
         },
       }))
     );
     setEdges(newEdges);
-  }, [data, expandedNodes, setNodes, setEdges, onNodeClick, onExpandMap]);
+  }, [data, expandedNodes, setNodes, setEdges, onNodeClick, onExpandMap, handleExpandNode, handleDeleteNode]);
 
   const downloadMarkdown = () => {
     if (!data) return;
@@ -432,7 +437,10 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
               maxZoom={1.5}
               defaultViewport={{ x: 0, y: 0, zoom: 0.5 }}
               elementsSelectable={true}
-              nodesDraggable={false}
+              nodesDraggable={true}
+              nodesConnectable={false}
+              snapToGrid={true}
+              snapGrid={[15, 15]}
             >
               <Background color="#f0f0f0" gap={16} />
               <Controls showInteractive={false} />

@@ -15,7 +15,7 @@ import { validateMindMapData } from "@/lib/utils";
 const USE_LOCAL_MODELS = process.env.NEXT_PUBLIC_USE_LOCAL_MODELS === "true";
 const LOCAL_MODEL = "llama3.1";
 const EXTERNAL_MODEL = "deepseek-chat";
-const FALLBACK_EXTERNAL_MODEL = "gpt-4o";
+const FALLBACK_EXTERNAL_MODEL = "gpt-4o-2024-11-20";
 
 const deepseek = new OpenAI({
   baseURL: "https://api.deepseek.com",

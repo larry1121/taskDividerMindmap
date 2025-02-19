@@ -18,10 +18,16 @@ export function useMindMapData() {
         },
         body: JSON.stringify({ topic: topic }),
       });
-      const data = await response.text();
-      setData(JSON.parse(data));
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch mind map");
+      }
+
+      const responseData = await response.json();
+      setData(responseData);
       setIsLoading(false);
     } catch (err) {
+      console.error("Error fetching mind map:", err);
       setError(err as Error);
       setIsLoading(false);
     }

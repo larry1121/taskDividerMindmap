@@ -15,8 +15,8 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Learn Thing",
-  description: "AI-generated mind map to learn something new.",
+  title: "Task Divider",
+  description: "AI-generated divided tasks to learn about what to automate.",
 };
 
 export default function RootLayout({
