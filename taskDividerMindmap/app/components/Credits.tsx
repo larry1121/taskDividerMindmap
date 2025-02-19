@@ -10,7 +10,7 @@ const Credits: React.FC = () => {
           target="_blank"
           className="text-blue-600 hover:underline"
         >
-          Arthur Takeda
+          XORO
         </a>
       </p>
     </div>

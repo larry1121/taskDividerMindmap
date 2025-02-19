@@ -13,6 +13,7 @@ import ReactFlow, {
   useEdgesState,
   MiniMap,
   ReactFlowInstance,
+  useReactFlow,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import {
@@ -30,6 +31,7 @@ import {
   ChevronDown,
   ChevronRight,
   HelpCircle,
+  Layout,
 } from "lucide-react";
 import { convertToMarkdown, downloadJson } from "@/lib/utils";
 import MindMapLegend from "./MindMapLegend";
@@ -178,15 +180,12 @@ const createNodesAndEdges = (
   const nodes: Node[] = [];
   const edges: Edge[] = [];
   
-  // 노드 ID 생성
   const nodeId = parentId 
     ? `${parentId}-${data.name.replace(/\s+/g, "-")}` 
     : data.name.replace(/\s+/g, "-");
 
-  // 수평 위치 계산 - 레벨에 따라 간격 증가
   const xPos = x + (level * horizontalSpacing);
   
-  // 현재 노드 추가
   nodes.push({
     id: nodeId,
     type: parentId ? (data.subtopics?.length ? "branch" : "leaf") : "root",
@@ -195,38 +194,33 @@ const createNodesAndEdges = (
       ...data,
       parentId,
       isRoot: !parentId,
-      isExpanded: true,
+      isExpanded: expandedNodes.has(nodeId),
       hasChildren: data.subtopics?.length > 0,
       onClick: () => {},
       onExpand: () => onExpand(nodeId, parentId),
-      nodeId, // nodeId 추가
+      nodeId,
     },
   });
 
-  // 부모 노드와의 엣지 추가
   if (parentId) {
     edges.push({
       id: `${parentId}-${nodeId}`,
       source: parentId,
       target: nodeId,
-      type: "mindmap",
+      type: "default",
       animated: true,
     });
   }
 
-  // 하위 노드들 처리
-  if (data.subtopics && data.subtopics.length > 0) {
-    const childSpacing = verticalSpacing * 2; // 자식 노드 간의 간격
+  if (data.subtopics && data.subtopics.length > 0 && expandedNodes.has(nodeId)) {
+    const childSpacing = verticalSpacing * 2;
     const totalChildren = data.subtopics.length;
     const totalHeight = (totalChildren - 1) * childSpacing;
-    const startY = y - (totalHeight / 2); // 중앙 정렬을 위한 시작 y 위치
+    const startY = y - (totalHeight / 2);
 
     data.subtopics.forEach((subtopic, childIndex) => {
       const childY = startY + (childIndex * childSpacing);
-      const {
-        nodes: childNodes,
-        edges: childEdges
-      } = createNodesAndEdges(
+      const { nodes: childNodes, edges: childEdges } = createNodesAndEdges(
         subtopic,
         nodeId,
         xPos,
@@ -257,6 +251,8 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState("");
   const [editedDetails, setEditedDetails] = useState("");
+
+  const reactFlowInstance = useReactFlow();
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     setSelectedSubtopic(node.data as Subtopic);
@@ -380,6 +376,72 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
     window.location.reload();
   };
 
+  const handleArrangeNodes = useCallback(() => {
+    const nodes = reactFlowInstance.getNodes();
+    const edges = reactFlowInstance.getEdges();
+    
+    // 레벨별 노드 그룹화
+    const nodesByLevel: { [key: number]: Node[] } = {};
+    
+    // 루트 노드 찾기
+    const rootNode = nodes.find(node => !edges.some(edge => edge.target === node.id));
+    if (!rootNode) return;
+    
+    // 레벨별로 노드 분류
+    const assignLevel = (nodeId: string, level: number) => {
+      const node = nodes.find(n => n.id === nodeId);
+      if (!node) return;
+      
+      if (!nodesByLevel[level]) {
+        nodesByLevel[level] = [];
+      }
+      nodesByLevel[level].push(node);
+      
+      // 자식 노드들 찾기
+      const childEdges = edges.filter(e => e.source === nodeId);
+      childEdges.forEach(edge => {
+        assignLevel(edge.target, level + 1);
+      });
+    };
+    
+    // 레벨 할당 시작
+    assignLevel(rootNode.id, 0);
+    
+    // 새로운 노드 배열 생성
+    const newNodes = [...nodes];
+    
+    // 레벨별로 노드 위치 재조정
+    const horizontalSpacing = 300;
+    const verticalSpacing = 150;
+    
+    Object.entries(nodesByLevel).forEach(([level, levelNodes]) => {
+      const numLevel = parseInt(level);
+      const xPosition = numLevel * horizontalSpacing;
+      
+      levelNodes.forEach((node, index) => {
+        const totalHeight = (levelNodes.length - 1) * verticalSpacing;
+        const yStart = -totalHeight / 2;
+        const yPosition = yStart + (index * verticalSpacing);
+        
+        const nodeIndex = newNodes.findIndex(n => n.id === node.id);
+        if (nodeIndex !== -1) {
+          newNodes[nodeIndex] = {
+            ...newNodes[nodeIndex],
+            position: { x: xPosition, y: yPosition }
+          };
+        }
+      });
+    });
+    
+    // 모든 노드 한 번에 업데이트
+    setNodes(newNodes);
+    
+    // 뷰포트 조정
+    setTimeout(() => {
+      reactFlowInstance.fitView({ padding: 0.2 });
+    }, 50);
+  }, [reactFlowInstance, setNodes]);
+
   if (!data) return null;
 
   return (
@@ -463,6 +525,14 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
               >
                 <Download className="w-4 h-4" />
                 JSON
+              </Button>
+              <Button
+                onClick={handleArrangeNodes}
+                className="flex items-center gap-2 cursor-pointer rounded-md"
+                variant="outline"
+              >
+                <Layout className="w-4 h-4" />
+                정리하기
               </Button>
             </div>
             <ReactFlow
