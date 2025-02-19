@@ -82,6 +82,7 @@ const NodeContent: React.FC<{
   onExpand,
   isExpanded,
   hasChildren,
+  isRoot,
   onExpandMap,
   nodeId,
   onDelete,
@@ -244,7 +245,7 @@ const createNodesAndEdges = (
 
 const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
   const [selectedSubtopic, setSelectedSubtopic] = useState<Subtopic | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -431,7 +432,6 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
               onEdgesChange={onEdgesChange}
               nodeTypes={nodeTypes}
               onNodeClick={onNodeClick}
-              onInit={onInit}
               fitView
               minZoom={0.1}
               maxZoom={1.5}
