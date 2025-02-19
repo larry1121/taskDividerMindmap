@@ -51,6 +51,7 @@ import {
 } from "@/components/ui/context-menu";
 import dynamic from 'next/dynamic';
 import 'reactflow/dist/base.css';
+import NodeLoadingOverlay from "./NodeLoadingOverlay";
 
 interface MindMapProps {
   data: { topic: string; subtopics: Subtopic[] } | null;
@@ -76,6 +77,8 @@ const NodeContent: React.FC<{
   onExpandMap: (nodeId: string) => Promise<void>;
   nodeId: string;
   onDelete: (nodeId: string) => void;
+  isExpanding?: boolean;
+  setExpandingNodes: React.Dispatch<React.SetStateAction<Set<string>>>;
 }> = ({
   name,
   onClick,
@@ -86,15 +89,14 @@ const NodeContent: React.FC<{
   onExpandMap,
   nodeId,
   onDelete,
+  isExpanding = false,
+  setExpandingNodes,
 }) => {
-  console.log('NodeContent rendered for:', { name, nodeId });
   return (
     <ContextMenu>
       <ContextMenuTrigger>
-        <div
-          className="p-4 rounded-md shadow-sm transition-all duration-300 ease-in-out cursor-pointer min-w-[12rem] bg-white hover:bg-gray-50 flex items-center justify-between"
-          onClick={onClick}
-        >
+        <div className="relative p-4 rounded-md shadow-sm transition-all duration-300 ease-in-out cursor-pointer min-w-[12rem] bg-white hover:bg-gray-50 flex items-center justify-between">
+          {isExpanding && <NodeLoadingOverlay />}
           <div className="text-lg font-bold text-center flex-grow">{name}</div>
           {hasChildren && (
             <button
@@ -104,24 +106,25 @@ const NodeContent: React.FC<{
               }}
               className="p-2 rounded-full bg-gray-200 hover:bg-gray-300 flex-shrink-0"
             >
-              {isExpanded ? (
-                <ChevronDown size={20} />
-              ) : (
-                <ChevronRight size={20} />
-              )}
+              {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
             </button>
           )}
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem
-          onClick={(e) => {
+          onClick={async (e) => {
             e.stopPropagation();
-            console.log('Expand Map clicked for node:', { name, nodeId });
-            onExpandMap(nodeId);
+            setExpandingNodes(prev => new Set(prev).add(nodeId));
+            await onExpandMap(nodeId);
+            setExpandingNodes(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(nodeId);
+              return newSet;
+            });
           }}
         >
-          Expand Map
+          확장하기
         </ContextMenuItem>
         {!isRoot && (
           <ContextMenuItem
@@ -131,7 +134,7 @@ const NodeContent: React.FC<{
             }}
             className="text-red-600 hover:text-red-700 hover:bg-red-50"
           >
-            Delete Node
+            노드 삭제
           </ContextMenuItem>
         )}
       </ContextMenuContent>
@@ -246,14 +249,49 @@ const createNodesAndEdges = (
 const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
   const [selectedSubtopic, setSelectedSubtopic] = useState<Subtopic | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [expandingNodes, setExpandingNodes] = useState<Set<string>>(new Set());
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedName, setEditedName] = useState("");
+  const [editedDetails, setEditedDetails] = useState("");
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     setSelectedSubtopic(node.data as Subtopic);
+    setEditedName(node.data.name);
+    setEditedDetails(node.data.details);
+    setIsEditing(false);
   }, []);
+
+  const handleSave = useCallback(() => {
+    if (!selectedSubtopic) return;
+
+    setNodes((prevNodes) =>
+      prevNodes.map((node) => {
+        if (node.id === selectedSubtopic.nodeId) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              name: editedName,
+              details: editedDetails,
+            },
+          };
+        }
+        return node;
+      })
+    );
+
+    setSelectedSubtopic({
+      ...selectedSubtopic,
+      name: editedName,
+      details: editedDetails,
+    });
+    
+    setIsEditing(false);
+  }, [selectedSubtopic, editedName, editedDetails, setNodes]);
 
   const handleExpandNode = useCallback((nodeId: string) => {
     setExpandedNodes((prev) => {
@@ -297,11 +335,13 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
           onExpandMap: () => onExpandMap(node.id),
           onDelete: handleDeleteNode,
           isExpanded: expandedNodes.has(node.id),
+          isExpanding: expandingNodes.has(node.id),
+          setExpandingNodes,
         },
       }))
     );
     setEdges(newEdges);
-  }, [data, expandedNodes, setNodes, setEdges, onNodeClick, onExpandMap, handleExpandNode, handleDeleteNode]);
+  }, [data, expandedNodes, setNodes, setEdges, onNodeClick, onExpandMap, handleExpandNode, handleDeleteNode, expandingNodes]);
 
   const downloadMarkdown = () => {
     if (!data) return;
@@ -452,16 +492,65 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
       </AnimatePresence>
       <Sheet
         open={!!selectedSubtopic}
-        onOpenChange={() => setSelectedSubtopic(null)}
+        onOpenChange={() => {
+          setSelectedSubtopic(null);
+          setIsEditing(false);
+        }}
       >
         <SheetContent className="overflow-y-auto">
           <SheetHeader>
-            <SheetTitle className="text-2xl mt-4 font-bold">
-              {selectedSubtopic?.name}
-            </SheetTitle>
-            <SheetDescription className="mb-2 text-gray-700">
-              {selectedSubtopic?.details}
-            </SheetDescription>
+            {isEditing ? (
+              <>
+                <div className="space-y-4">
+                  <input
+                    type="text"
+                    value={editedName}
+                    onChange={(e) => setEditedName(e.target.value)}
+                    className="text-2xl w-full p-2 border rounded-md font-bold"
+                  />
+                  <textarea
+                    value={editedDetails}
+                    onChange={(e) => setEditedDetails(e.target.value)}
+                    className="w-full p-2 border rounded-md min-h-[100px] text-gray-700"
+                    placeholder="상세 내용을 입력하세요..."
+                  />
+                  <div className="flex gap-2">
+                    <Button onClick={handleSave} className="flex-1">
+                      저장
+                    </Button>
+                    <Button 
+                      onClick={() => {
+                        setIsEditing(false);
+                        setEditedName(selectedSubtopic?.name || "");
+                        setEditedDetails(selectedSubtopic?.details || "");
+                      }} 
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      취소
+                    </Button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between items-center">
+                  <SheetTitle className="text-2xl mt-4 font-bold">
+                    {selectedSubtopic?.name}
+                  </SheetTitle>
+                  <Button
+                    onClick={() => setIsEditing(true)}
+                    variant="outline"
+                    size="sm"
+                  >
+                    수정
+                  </Button>
+                </div>
+                <SheetDescription className="mb-2 text-gray-700">
+                  {selectedSubtopic?.details}
+                </SheetDescription>
+              </>
+            )}
           </SheetHeader>
           {selectedSubtopic?.links && selectedSubtopic.links.length > 0 && (
             <div className="mt-8">

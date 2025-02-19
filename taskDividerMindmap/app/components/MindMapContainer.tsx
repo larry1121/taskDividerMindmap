@@ -11,7 +11,7 @@ export default function MindMapContainer() {
   const { data, isLoading, error, fetchMindMap, expandMap } = useMindMapData();
   const router = useRouter();
 
-  if (isLoading) return <LoadingMindMap />;
+  if (isLoading && !data) return <LoadingMindMap />;
 
   if (error) {
     router.push("/?error=true");

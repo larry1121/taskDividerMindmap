@@ -25,10 +25,10 @@ export function useMindMapData() {
 
       const responseData = await response.json();
       setData(responseData);
-      setIsLoading(false);
     } catch (err) {
       console.error("Error fetching mind map:", err);
       setError(err as Error);
+    } finally {
       setIsLoading(false);
     }
   };
@@ -75,7 +75,6 @@ export function useMindMapData() {
     if (!data) return;
 
     try {
-      setIsLoading(true);
       const nodeTopic = getNodeTopic(data, nodeId);
       const response = await fetch("/api/generate", {
         method: "POST",
@@ -96,11 +95,9 @@ export function useMindMapData() {
       const mergedData = mergeExpandedData(data, expandedData, nodeId);
 
       setData(mergedData);
-      setIsLoading(false);
     } catch (err) {
       console.error("Error in expandMap:", err);
       setError(err as Error);
-      setIsLoading(false);
     }
   };
 
