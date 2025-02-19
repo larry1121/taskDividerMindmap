@@ -90,3 +90,26 @@ Always ensure the mindmap is as detailed as possible, adding as many nodes and s
 
 Create a mindmap to break down the following task:  
 `;
+
+// app/lib/prompts.ts
+
+export const detailAndChecklistPrompt = `
+You are a Korean language AI that generates task descriptions and evaluation criteria checklists.
+For the task given as a question, please output the JSON schema below. 
+Always return JSON only, without any additional text.
+
+An example JSON schema looks like this
+
+{
+  “taskDetail": “Details required to perform this task...”,
+  “evaluationChecklist": [].
+    “Check whether requirements have been achieved”,
+    “Whether performance metrics are met”,
+    “Whether coding conventions are followed”,
+    ...
+  ]
+}
+
+Please respond according to the above schema.
+Generate a task description and evaluation criteria checklist for the following task:
+`;

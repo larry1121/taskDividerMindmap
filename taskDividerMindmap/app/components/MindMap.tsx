@@ -52,22 +52,14 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import dynamic from 'next/dynamic';
-import 'reactflow/dist/base.css';
+import dynamic from "next/dynamic";
+import "reactflow/dist/base.css";
 import NodeLoadingOverlay from "./NodeLoadingOverlay";
 
 interface MindMapProps {
   data: { topic: string; subtopics: Subtopic[] } | null;
   onExpandMap: (nodeId: string) => Promise<void>;
 }
-
-// const ReactFlow = dynamic(
-//   () => import('reactflow').then((mod) => mod.default),
-//   {
-//     ssr: false,
-//     loading: () => <div>Loading...</div>
-//   }
-// );
 
 const NodeContent: React.FC<{
   name: string;
@@ -98,7 +90,10 @@ const NodeContent: React.FC<{
   return (
     <ContextMenu>
       <ContextMenuTrigger>
-        <div className="relative p-4 rounded-md shadow-sm transition-all duration-300 ease-in-out cursor-pointer min-w-[12rem] bg-white hover:bg-gray-50 flex items-center justify-between">
+        <div
+          className="relative p-4 rounded-md shadow-sm transition-all duration-300 ease-in-out cursor-pointer min-w-[12rem] bg-white hover:bg-gray-50 flex items-center justify-between"
+          onClick={onClick} // ← 노드 클릭 시 상세 정보 불러오기
+        >
           {isExpanding && <NodeLoadingOverlay />}
           <div className="text-lg font-bold text-center flex-grow">{name}</div>
           {hasChildren && (
@@ -118,9 +113,9 @@ const NodeContent: React.FC<{
         <ContextMenuItem
           onClick={async (e) => {
             e.stopPropagation();
-            setExpandingNodes(prev => new Set(prev).add(nodeId));
+            setExpandingNodes((prev) => new Set(prev).add(nodeId));
             await onExpandMap(nodeId);
-            setExpandingNodes(prev => {
+            setExpandingNodes((prev) => {
               const newSet = new Set(prev);
               newSet.delete(nodeId);
               return newSet;
@@ -167,6 +162,7 @@ const LeafNode: React.FC<NodeProps> = ({ data }) => (
   </div>
 );
 
+/** mind map를 구성할 nodes/edges 배열 생성용 */
 const createNodesAndEdges = (
   data: Subtopic,
   parentId: string | null,
@@ -180,13 +176,13 @@ const createNodesAndEdges = (
 ) => {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
-  
-  const nodeId = parentId 
-    ? `${parentId}-${data.name.replace(/\s+/g, "-")}` 
+
+  const nodeId = parentId
+    ? `${parentId}-${data.name.replace(/\s+/g, "-")}`
     : data.name.replace(/\s+/g, "-");
 
-  const xPos = x + (level * horizontalSpacing);
-  
+  const xPos = x + level * horizontalSpacing;
+
   nodes.push({
     id: nodeId,
     type: parentId ? (data.subtopics?.length ? "branch" : "leaf") : "root",
@@ -217,10 +213,10 @@ const createNodesAndEdges = (
     const childSpacing = verticalSpacing * 2;
     const totalChildren = data.subtopics.length;
     const totalHeight = (totalChildren - 1) * childSpacing;
-    const startY = y - (totalHeight / 2);
+    const startY = y - totalHeight / 2;
 
     data.subtopics.forEach((subtopic, childIndex) => {
-      const childY = startY + (childIndex * childSpacing);
+      const childY = startY + childIndex * childSpacing;
       const { nodes: childNodes, edges: childEdges } = createNodesAndEdges(
         subtopic,
         nodeId,
@@ -232,7 +228,7 @@ const createNodesAndEdges = (
         expandedNodes,
         onExpand
       );
-      
+
       nodes.push(...childNodes);
       edges.push(...childEdges);
     });
@@ -257,13 +253,93 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
 
   const reactFlowInstance = useReactFlow();
 
-  const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
-    setSelectedSubtopic(node.data as Subtopic);
-    setEditedName(node.data.name);
-    setEditedDetails(node.data.details);
-    setIsEditing(false);
-  }, []);
+  /**
+   * 4. 클라이언트 호출 로직
+   * Task 상세 설명과 평가기준을 /api/generate-detail 로 가져오는 함수
+   */
+  const handleNodeClickDetail = useCallback(
+    async (node: Node) => {
+      if (!node) return;
 
+      // 이미 한 번 상세정보를 불러온 노드인지 체크
+      if ((node.data as any)?.taskDetail) {
+        // 기존 정보를 그대로 Sheet에 표시
+        openSheet(node);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+
+        // /api/generate-detail에 POST
+        const res = await fetch("/api/generate-detail", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            topic: node.data.name,
+            nodeId: node.id 
+          }),
+        });
+        if (!res.ok) throw new Error("Failed to fetch task details");
+
+        const { taskDetail, evaluationChecklist } = await res.json();
+        // node.data에 상세정보 저장
+        setNodes((prevNodes) =>
+          prevNodes.map((n) => {
+            if (n.id === node.id) {
+              return {
+                ...n,
+                data: {
+                  ...n.data,
+                  taskDetail,
+                  evaluationChecklist,
+                },
+              };
+            }
+            return n;
+          })
+        );
+
+        // Sheet 열기
+        openSheet({
+          ...node,
+          data: {
+            ...node.data,
+            taskDetail,
+            evaluationChecklist,
+          },
+        });
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [setNodes]
+  );
+
+  /** Sheet에 선택된 노드 정보를 표시하는 로직 */
+  const openSheet = (node: Node) => {
+    const data = node.data as Subtopic;
+    setSelectedSubtopic(data);
+    setEditedName(data.name);
+    setEditedDetails(data.details);
+    setIsEditing(false);
+  };
+
+  /**
+   * Node 클릭 시 실행
+   * - 단순 서브토픽 select + taskDetail이 없다면 handleNodeClickDetail로 호출
+   */
+  const onNodeClick = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      event.stopPropagation();
+      handleNodeClickDetail(node);
+    },
+    [handleNodeClickDetail]
+  );
+
+  // 이름/세부사항 수정 후 저장
   const handleSave = useCallback(() => {
     if (!selectedSubtopic) return;
 
@@ -288,10 +364,11 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
       name: editedName,
       details: editedDetails,
     });
-    
+
     setIsEditing(false);
   }, [selectedSubtopic, editedName, editedDetails, setNodes]);
 
+  // 노드 확장 토글
   const handleExpandNode = useCallback((nodeId: string) => {
     setExpandedNodes((prev) => {
       const newSet = new Set(prev);
@@ -304,11 +381,20 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
     });
   }, []);
 
-  const handleDeleteNode = useCallback((nodeId: string) => {
-    setNodes((nodes) => nodes.filter((node) => !node.id.startsWith(nodeId)));
-    setEdges((edges) => edges.filter((edge) => !edge.source.startsWith(nodeId) && !edge.target.startsWith(nodeId)));
-  }, [setNodes, setEdges]);
+  // 노드 삭제
+  const handleDeleteNode = useCallback(
+    (nodeId: string) => {
+      setNodes((nodes) => nodes.filter((node) => !node.id.startsWith(nodeId)));
+      setEdges((edges) =>
+        edges.filter(
+          (edge) => !edge.source.startsWith(nodeId) && !edge.target.startsWith(nodeId)
+        )
+      );
+    },
+    [setNodes, setEdges]
+  );
 
+  // 초기/업데이트 시 nodes, edges 생성
   useEffect(() => {
     if (!data) return;
 
@@ -329,7 +415,7 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
         ...node,
         data: {
           ...node.data,
-          onClick: () => onNodeClick({} as React.MouseEvent, node),
+          onClick: () => {}, // 임시 (아래 onNodeClick 사용 시 reactflow가 자동 연결)
           onExpand: () => handleExpandNode(node.id),
           onExpandMap: () => onExpandMap(node.id),
           onDelete: handleDeleteNode,
@@ -340,8 +426,18 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
       }))
     );
     setEdges(newEdges);
-  }, [data, expandedNodes, setNodes, setEdges, onNodeClick, onExpandMap, handleExpandNode, handleDeleteNode, expandingNodes]);
+  }, [
+    data,
+    expandedNodes,
+    setNodes,
+    setEdges,
+    handleExpandNode,
+    handleDeleteNode,
+    expandingNodes,
+    onExpandMap,
+  ]);
 
+  // Markdown 다운로드
   const downloadMarkdown = () => {
     if (!data) return;
     const markdown = convertToMarkdown(data);
@@ -356,6 +452,7 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
     URL.revokeObjectURL(url);
   };
 
+  // JSON 다운로드
   const handleDownloadJson = () => {
     if (!data) return;
     downloadJson(data, `${data.topic.replace(/\s+/g, "_")}_mind_map.json`);
@@ -370,112 +467,97 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
     []
   );
 
+  // 새 Mind Map 생성
   const handleNewClick = () => {
     setIsConfirmOpen(true);
   };
-
   const handleConfirmNew = () => {
     setIsConfirmOpen(false);
     window.location.reload();
   };
 
+  /** 노드 자동정렬 */
   const handleArrangeNodes = useCallback(() => {
     const nodes = reactFlowInstance.getNodes();
     const edges = reactFlowInstance.getEdges();
-    
-    // 레벨별 노드 그룹화
+
     const nodesByLevel: { [key: number]: Node[] } = {};
-    
-    // 루트 노드 찾기
-    const rootNode = nodes.find(node => !edges.some(edge => edge.target === node.id));
+    const rootNode = nodes.find((n) => !edges.some((e) => e.target === n.id));
     if (!rootNode) return;
-    
-    // 레벨별로 노드 분류
+
+    // 레벨별로 노드를 분류
     const assignLevel = (nodeId: string, level: number) => {
-      const node = nodes.find(n => n.id === nodeId);
+      const node = nodes.find((n) => n.id === nodeId);
       if (!node) return;
-      
+
       if (!nodesByLevel[level]) {
         nodesByLevel[level] = [];
       }
       nodesByLevel[level].push(node);
-      
-      // 자식 노드들 찾기
-      const childEdges = edges.filter(e => e.source === nodeId);
-      childEdges.forEach(edge => {
-        assignLevel(edge.target, level + 1);
-      });
+
+      // 자식 노드들
+      const childEdges = edges.filter((e) => e.source === nodeId);
+      childEdges.forEach((edge) => assignLevel(edge.target, level + 1));
     };
-    
-    // 레벨 할당 시작
+
     assignLevel(rootNode.id, 0);
-    
-    // 새로운 노드 배열 생성
+
     const newNodes = [...nodes];
-    
-    // 레벨별로 노드 위치 재조정
     const horizontalSpacing = 300;
     const verticalSpacing = 150;
-    
+
     Object.entries(nodesByLevel).forEach(([level, levelNodes]) => {
       const numLevel = parseInt(level);
       const xPosition = numLevel * horizontalSpacing;
-      
       levelNodes.forEach((node, index) => {
         const totalHeight = (levelNodes.length - 1) * verticalSpacing;
         const yStart = -totalHeight / 2;
-        const yPosition = yStart + (index * verticalSpacing);
-        
-        const nodeIndex = newNodes.findIndex(n => n.id === node.id);
+        const yPosition = yStart + index * verticalSpacing;
+
+        const nodeIndex = newNodes.findIndex((n) => n.id === node.id);
         if (nodeIndex !== -1) {
           newNodes[nodeIndex] = {
             ...newNodes[nodeIndex],
-            position: { x: xPosition, y: yPosition }
+            position: { x: xPosition, y: yPosition },
           };
         }
       });
     });
-    
-    // 모든 노드 한 번에 업데이트
+
     setNodes(newNodes);
-    
-    // 뷰포트 조정
     setTimeout(() => {
       reactFlowInstance.fitView({ padding: 0.2 });
     }, 50);
   }, [reactFlowInstance, setNodes]);
 
-  // 노드 드래그 시작/종료 핸들러 추가
+  // 드래그 시작/종료
   const onNodeDragStart = useCallback(() => {
     setIsDragging(true);
   }, []);
-
   const onNodeDragStop = useCallback(() => {
     setIsDragging(false);
   }, []);
 
-  // onNodesChange를 래핑하는 새로운 핸들러
-  const handleNodesChange = useCallback((changes: NodeChange[]) => {
-    const positionChanges = changes.some(
-      change => change.type === 'position'
-    );
-    if (positionChanges) {
-      setIsPositionChanging(true);
-      // 위치 변경 후 짧은 시간 뒤에 상태 리셋
-      setTimeout(() => setIsPositionChanging(false), 100);
-    }
-    onNodesChange(changes);
-  }, [onNodesChange]);
+  // NodeChange 감지 → 위치 변경 처리
+  const handleNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      const positionChanges = changes.some((change) => change.type === "position");
+      if (positionChanges) {
+        setIsPositionChanging(true);
+        setTimeout(() => setIsPositionChanging(false), 100);
+      }
+      onNodesChange(changes);
+    },
+    [onNodesChange]
+  );
 
-  // data가 변경될 때 자동으로 정리하기 실행
+  // data 변경 시 자동 정리
   useEffect(() => {
     if (!data || isDragging || isEditing || isPositionChanging) return;
-    
-    const timeoutId = setTimeout(() => {
+    const tid = setTimeout(() => {
       handleArrangeNodes();
     }, 100);
-
-    return () => clearTimeout(timeoutId);
+    return () => clearTimeout(tid);
   }, [data, isDragging, isEditing, isPositionChanging, handleArrangeNodes]);
 
   if (!data) return null;
@@ -491,6 +573,7 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
             transition={{ duration: 0.5, ease: "easeOut" }}
             style={{ width: "100%", height: "100%" }}
           >
+            {/* 상단 버튼/설정 */}
             <div className="absolute top-4 left-4 z-10">
               <Dialog>
                 <DialogTrigger asChild>
@@ -527,9 +610,8 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
                     <DialogTitle>Confirm New Mind Map</DialogTitle>
                   </DialogHeader>
                   <p>
-                    By creating a new mind map, this one will be lost. If you
-                    want to keep it, make sure to download it as a JSON or
-                    Markdown file.
+                    By creating a new mind map, this one will be lost. If you want
+                    to keep it, make sure to download it as a JSON or Markdown file.
                   </p>
                   <div className="flex justify-end gap-2 mt-4">
                     <Button
@@ -571,13 +653,15 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
                 정리하기
               </Button>
             </div>
+
+            {/* React Flow 영역 */}
             <ReactFlow
               nodes={nodes}
               edges={edges}
               onNodesChange={handleNodesChange}
               onEdgesChange={onEdgesChange}
               nodeTypes={nodeTypes}
-              onNodeClick={onNodeClick}
+              onNodeClick={onNodeClick} // 노드 클릭 시 상세 로드
               fitView
               minZoom={0.1}
               maxZoom={1.5}
@@ -598,6 +682,8 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* 우측/좌측 시트 */}
       <Sheet
         open={!!selectedSubtopic}
         onOpenChange={() => {
@@ -608,49 +694,43 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
         <SheetContent className="overflow-y-auto">
           <SheetHeader>
             {isEditing ? (
-              <>
-                <div className="space-y-4">
-                  <input
-                    type="text"
-                    value={editedName}
-                    onChange={(e) => setEditedName(e.target.value)}
-                    className="text-2xl w-full p-2 border rounded-md font-bold"
-                  />
-                  <textarea
-                    value={editedDetails}
-                    onChange={(e) => setEditedDetails(e.target.value)}
-                    className="w-full p-2 border rounded-md min-h-[100px] text-gray-700"
-                    placeholder="상세 내용을 입력하세요..."
-                  />
-                  <div className="flex gap-2">
-                    <Button onClick={handleSave} className="flex-1">
-                      저장
-                    </Button>
-                    <Button 
-                      onClick={() => {
-                        setIsEditing(false);
-                        setEditedName(selectedSubtopic?.name || "");
-                        setEditedDetails(selectedSubtopic?.details || "");
-                      }} 
-                      variant="outline"
-                      className="flex-1"
-                    >
-                      취소
-                    </Button>
-                  </div>
+              <div className="space-y-4">
+                <input
+                  type="text"
+                  value={editedName}
+                  onChange={(e) => setEditedName(e.target.value)}
+                  className="text-2xl w-full p-2 border rounded-md font-bold"
+                />
+                <textarea
+                  value={editedDetails}
+                  onChange={(e) => setEditedDetails(e.target.value)}
+                  className="w-full p-2 border rounded-md min-h-[100px] text-gray-700"
+                  placeholder="상세 내용을 입력하세요..."
+                />
+                <div className="flex gap-2">
+                  <Button onClick={handleSave} className="flex-1">
+                    저장
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setIsEditing(false);
+                      setEditedName(selectedSubtopic?.name || "");
+                      setEditedDetails(selectedSubtopic?.details || "");
+                    }}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    취소
+                  </Button>
                 </div>
-              </>
+              </div>
             ) : (
               <>
                 <div className="flex justify-between items-center">
                   <SheetTitle className="text-2xl mt-4 font-bold">
                     {selectedSubtopic?.name}
                   </SheetTitle>
-                  <Button
-                    onClick={() => setIsEditing(true)}
-                    variant="outline"
-                    size="sm"
-                  >
+                  <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">
                     수정
                   </Button>
                 </div>
@@ -660,6 +740,32 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
               </>
             )}
           </SheetHeader>
+
+          {/* GPT가 생성한 Task 상세 설명이 있다면 출력 */}
+          {selectedSubtopic?.["taskDetail"] && (
+            <div className="mt-6 mb-2 p-3 bg-gray-50 rounded-md">
+              <h3 className="text-lg font-semibold mb-2">Task 상세 설명</h3>
+              <p className="text-gray-700 whitespace-pre-line">
+                {selectedSubtopic["taskDetail"]}
+              </p>
+            </div>
+          )}
+
+          {/* GPT가 생성한 체크리스트가 있다면 출력 */}
+          {selectedSubtopic?.["evaluationChecklist"] && (
+            <div className="mt-6 mb-2 p-3 bg-gray-50 rounded-md">
+              <h3 className="text-lg font-semibold mb-2">평가기준 체크리스트</h3>
+              <ul className="list-disc pl-6 text-gray-700">
+                {(selectedSubtopic["evaluationChecklist"] as string[]).map(
+                  (item, i) => (
+                    <li key={i}>{item}</li>
+                  )
+                )}
+              </ul>
+            </div>
+          )}
+
+          {/* 링크들 */}
           {selectedSubtopic?.links && selectedSubtopic.links.length > 0 && (
             <div className="mt-8">
               <h3 className="text-xl font-semibold mb-2">Learn More</h3>

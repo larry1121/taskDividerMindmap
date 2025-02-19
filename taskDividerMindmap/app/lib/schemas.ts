@@ -48,3 +48,13 @@ export const ExpandMapRequestSchema = z.object({
   topic: z.string(),
   nodeId: z.string(),
 });
+
+// app/lib/schemas.ts
+
+// 1) 새로 생성할 type & schema
+export const NodeDetailResponseSchema = z.object({
+  taskDetail: z.string(),
+  evaluationChecklist: z.array(z.string()),
+});
+
+export type NodeDetailResponse = z.infer<typeof NodeDetailResponseSchema>;
