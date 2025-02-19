@@ -1,9 +1,7 @@
 import { ollama } from "ollama-ai-provider";
-import OpenAI from "openai";
 import { generateObject, generateText } from "ai";
+import { openai } from "@ai-sdk/openai";
 import { defaultLocalPrompt, defaultExternalPrompt } from "@/app/lib/prompts";
-import { z } from "zod";
-import { openai as fallbackOpenAI } from "@ai-sdk/openai";
 
 import {
   FlatMindMapSchema,
@@ -11,43 +9,16 @@ import {
   Subtopic,
 } from "@/app/lib/schemas";
 import { validateMindMapData } from "@/lib/utils";
+import { z } from "zod";
 
 const USE_LOCAL_MODELS = process.env.NEXT_PUBLIC_USE_LOCAL_MODELS === "true";
 const LOCAL_MODEL = "llama3.1";
-const EXTERNAL_MODEL = "deepseek-chat";
-const FALLBACK_EXTERNAL_MODEL = "gpt-4o-2024-11-20";
-
-const deepseek = new OpenAI({
-  baseURL: "https://api.deepseek.com",
-  apiKey: process.env.DEEPSEEK_API_KEY!,
-});
-
-interface CompletionParams {
-  messages: Array<{ role: string; content: string }>;
-  temperature?: number;
-  max_tokens?: number;
-}
-
-function deepseekModel(modelName: string, options: object) {
-  return {
-    chat: {
-      completions: {
-        create: async (params: CompletionParams) => {
-          return await deepseek.chat.completions.create({
-            model: modelName,
-            ...params,
-            ...options,
-          });
-        },
-      },
-    },
-  };
-}
+const EXTERNAL_MODEL = "gpt-4o";
 
 const getModel = (useLocalModel: boolean) =>
   useLocalModel
     ? ollama(LOCAL_MODEL)
-    : deepseekModel(EXTERNAL_MODEL, { response_format: { type: "json_object" } });
+    : openai(EXTERNAL_MODEL, { structuredOutputs: true });
 
 const getPrompt = (useLocalModel: boolean, topic: string, nodeId?: string) => {
   const basePrompt = useLocalModel ? defaultLocalPrompt : defaultExternalPrompt;
@@ -64,7 +35,9 @@ export async function POST(req: Request) {
     const model = getModel(USE_LOCAL_MODELS);
     const prompt = getPrompt(USE_LOCAL_MODELS, topic, nodeId);
 
-    const generateMindMap = async (): Promise<z.infer<typeof FlatMindMapSchema>> => {
+    const generateMindMap = async (): Promise<
+      z.infer<typeof FlatMindMapSchema>
+    > => {
       if (USE_LOCAL_MODELS) {
         const response = await generateText({ model, prompt });
 
@@ -72,16 +45,10 @@ export async function POST(req: Request) {
           const cleanedResponse = response.text.trim();
           const lastBrace = cleanedResponse.lastIndexOf("}");
           const validJson = cleanedResponse.substring(0, lastBrace + 1);
-          const parsedResponse = JSON.parse(validJson);
+          let parsedResponse = JSON.parse(validJson);
 
           if (nodeId) {
-            interface SubtopicData {
-              name: string;
-              details: string;
-              links: Array<{ title: string; type: string; url: string }>;
-            }
-
-            const subtopics = parsedResponse.subtopics.map((st: SubtopicData) => ({
+            const subtopics = parsedResponse.subtopics.map((st: any) => ({
               id: `${nodeId}-${st.name.replace(/\s+/g, "-")}`,
               parentId: nodeId,
               name: st.name,
@@ -113,24 +80,12 @@ export async function POST(req: Request) {
         }
       }
 
-      // DeepSeek 모델 사용 시 직접 응답 처리
-      try {
-        const response = await model.chat.completions.create({
-          messages: [{ role: "user", content: prompt }],
-        });
-        
-        const result = response.choices[0].message.content;
-        return JSON.parse(result);
-      } catch (deepseekError) {
-        console.error("DeepSeek call failed, falling back to OpenAI:", deepseekError);
-        const fallbackModel = fallbackOpenAI(FALLBACK_EXTERNAL_MODEL, { structuredOutputs: true });
-        const { object } = await generateObject({
-          model: fallbackModel,
-          prompt,
-          schema: FlatMindMapSchema,
-        });
-        return object;
-      }
+      const { object } = await generateObject({
+        model,
+        prompt,
+        schema: FlatMindMapSchema,
+      });
+      return object;
     };
 
     const flatMindMapData = await generateMindMap();
@@ -170,19 +125,20 @@ export async function POST(req: Request) {
   }
 }
 
-interface NodeData {
-  name: string;
-  details: string;
-  links: Array<{ title: string; type: string; url: string }>;
-  subtopics: Subtopic[];
-  id: string;
-  parentId: string | null;
-}
-
 function reconstructNestedStructure(
   flatSubtopics: z.infer<typeof FlatSubtopicSchema>[]
 ): Subtopic[] {
-  const subtopicMap = new Map<string, NodeData>();
+  const subtopicMap = new Map<
+    string,
+    {
+      name: string;
+      details: string;
+      links: any[];
+      subtopics: any[];
+      id: string;
+      parentId: string | null;
+    }
+  >();
 
   flatSubtopics.forEach((subtopic) => {
     subtopicMap.set(subtopic.id, {
@@ -195,7 +151,7 @@ function reconstructNestedStructure(
     });
   });
 
-  const rootNodes: NodeData[] = [];
+  const rootNodes: any[] = [];
   flatSubtopics.forEach((subtopic) => {
     const node = subtopicMap.get(subtopic.id);
     if (!node) return;
@@ -214,8 +170,8 @@ function reconstructNestedStructure(
     parent.subtopics.push(node);
   });
 
-  const cleanNode = (node: NodeData): Subtopic => {
-    const { id: _id, parentId: _parentId, ...cleanedNode } = node;
+  const cleanNode = (node: any): Subtopic => {
+    const { id, parentId, ...cleanedNode } = node;
     return {
       ...cleanedNode,
       subtopics: node.subtopics.map(cleanNode),

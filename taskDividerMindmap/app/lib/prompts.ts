@@ -84,7 +84,7 @@ The mindmap should include:
 - Dependencies between tasks, if applicable.
 - Suggested resources in the "links" section.
 - including only links to existing.
-- name of subtopics should be different from the main topic.
+- name of subtopics should be different from the parent topic.
 
 Always ensure the mindmap is as detailed as possible, adding as many nodes and subtopics as needed for a comprehensive breakdown.
 
