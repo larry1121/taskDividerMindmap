@@ -14,6 +14,7 @@ import ReactFlow, {
   MiniMap,
   ReactFlowInstance,
   useReactFlow,
+  NodeChange,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import {
@@ -251,6 +252,8 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState("");
   const [editedDetails, setEditedDetails] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+  const [isPositionChanging, setIsPositionChanging] = useState(false);
 
   const reactFlowInstance = useReactFlow();
 
@@ -442,6 +445,39 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
     }, 50);
   }, [reactFlowInstance, setNodes]);
 
+  // 노드 드래그 시작/종료 핸들러 추가
+  const onNodeDragStart = useCallback(() => {
+    setIsDragging(true);
+  }, []);
+
+  const onNodeDragStop = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // onNodesChange를 래핑하는 새로운 핸들러
+  const handleNodesChange = useCallback((changes: NodeChange[]) => {
+    const positionChanges = changes.some(
+      change => change.type === 'position'
+    );
+    if (positionChanges) {
+      setIsPositionChanging(true);
+      // 위치 변경 후 짧은 시간 뒤에 상태 리셋
+      setTimeout(() => setIsPositionChanging(false), 100);
+    }
+    onNodesChange(changes);
+  }, [onNodesChange]);
+
+  // data가 변경될 때 자동으로 정리하기 실행
+  useEffect(() => {
+    if (!data || isDragging || isEditing || isPositionChanging) return;
+    
+    const timeoutId = setTimeout(() => {
+      handleArrangeNodes();
+    }, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, [data, isDragging, isEditing, isPositionChanging, handleArrangeNodes]);
+
   if (!data) return null;
 
   return (
@@ -538,7 +574,7 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
             <ReactFlow
               nodes={nodes}
               edges={edges}
-              onNodesChange={onNodesChange}
+              onNodesChange={handleNodesChange}
               onEdgesChange={onEdgesChange}
               nodeTypes={nodeTypes}
               onNodeClick={onNodeClick}
@@ -551,6 +587,8 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
               nodesConnectable={false}
               snapToGrid={true}
               snapGrid={[15, 15]}
+              onNodeDragStart={onNodeDragStart}
+              onNodeDragStop={onNodeDragStop}
             >
               <Background color="#f0f0f0" gap={16} />
               <Controls showInteractive={false} />
