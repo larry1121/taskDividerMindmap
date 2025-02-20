@@ -282,16 +282,18 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
     async (node: Node) => {
       if (!node) return;
   
-      // 이미 상세정보와 링크가 있는 경우 Sheet만 열기
+      // 1. 먼저 Sheet 열기 (기본 데이터로)
+      openSheet(node);
+      
+      // 2. 이미 상세정보가 있다면 추가 요청하지 않음
       if ((node.data as any)?.taskDetail && node.data.links?.length > 0) {
-        openSheet(node);
         return;
       }
   
       try {
         setIsLoadingDetail(true);
   
-        // 1. Task 상세 정보 가져오기
+        // 3. Task 상세 정보 가져오기
         const detailRes = await fetch("/api/generate-detail", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -301,7 +303,7 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
         if (!detailRes.ok) throw new Error("Failed to fetch task details");
         const { taskDetail, evaluationChecklist } = await detailRes.json();
   
-        // 2. 링크가 없는 경우에만 링크 검색
+        // 4. 링크가 없는 경우에만 링크 검색
         let links = node.data.links || [];
         if (links.length === 0) {
           const searchRes = await fetch("/api/search-links", {
@@ -317,7 +319,7 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
           }
         }
   
-        // 3. 노드 데이터 업데이트
+        // 5. 노드 데이터 업데이트
         setNodes((prevNodes) =>
           prevNodes.map((n) => {
             if (n.id === node.id) {
@@ -335,16 +337,16 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
           })
         );
   
-        // 4. Sheet 열기
-        openSheet({
-          ...node,
-          data: {
-            ...node.data,
+        // 6. selectedSubtopic 업데이트
+        setSelectedSubtopic((prev) => 
+          prev ? {
+            ...prev,
             taskDetail,
             evaluationChecklist,
             links,
-          },
-        });
+          } : null
+        );
+  
       } catch (err) {
         console.error(err);
       } finally {
@@ -776,176 +778,175 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
         }}
       >
         <SheetContent className="overflow-y-auto">
-  <SheetHeader>
-    {isEditing ? (
-      <div className="space-y-4">
-        <input
-          type="text"
-          value={editedName}
-          onChange={(e) => setEditedName(e.target.value)}
-          className="text-2xl w-full p-2 border rounded-md font-bold"
-        />
-        <textarea
-          value={editedDetails}
-          onChange={(e) => setEditedDetails(e.target.value)}
-          className="w-full p-2 border rounded-md min-h-[100px] text-gray-700"
-          placeholder="상세 내용을 입력하세요..."
-        />
-        <div className="flex gap-2">
-          <Button onClick={handleSave} className="flex-1">
-            저장
-          </Button>
-          <Button
-            onClick={() => {
-              setIsEditing(false);
-              setEditedName(selectedSubtopic?.name || "");
-              setEditedDetails(selectedSubtopic?.details || "");
-            }}
-            variant="outline"
-            className="flex-1"
-          >
-            취소
-          </Button>
-        </div>
-      </div>
-    ) : (
-      <>
-        <div className="flex justify-between items-center">
-          <SheetTitle className="text-2xl mt-4 font-bold">
-            {selectedSubtopic?.name}
-          </SheetTitle>
-          <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">
-            수정
-          </Button>
-        </div>
-        <SheetDescription className="mb-2 text-gray-700">
-          {selectedSubtopic?.details}
-        </SheetDescription>
-      </>
-    )}
-  </SheetHeader>
-
-  {/* 로딩 중일 때 표시되는 로딩 화면 */}
-  {isLoadingDetail ? (
-    <div className="flex justify-center items-center h-full">
-      <div className="loader">Loading...</div> {/* 커스터마이징 가능한 로딩 애니메이션 */}
-    </div>
-  ) : (
-    <>
-      {/* GPT가 생성한 Task 상세 설명이 있다면 출력 */}
-      {selectedSubtopic?.["taskDetail"] && (
-        <div className="mt-6 mb-2 p-3 bg-gray-50 rounded-md">
-          <h3 className="text-lg font-semibold mb-2">Task 상세 설명</h3>
-          <p className="text-gray-700 whitespace-pre-line">
-            {selectedSubtopic["taskDetail"]}
-          </p>
-        </div>
-      )}
-
-      {/* GPT가 생성한 체크리스트가 있다면 출력 */}
-      {selectedSubtopic?.["evaluationChecklist"] && (
-        <div className="mt-6 mb-2 p-3 bg-gray-50 rounded-md">
-          <h3 className="text-lg font-semibold mb-2">평가기준 체크리스트</h3>
-          <ul className="list-disc pl-6 text-gray-700">
-            {(selectedSubtopic["evaluationChecklist"] as string[]).map(
-              (item, i) => (
-                <li key={i}>{item}</li>
-              )
-            )}
-          </ul>
-        </div>
-      )}
-
-      {/* R&R 섹션 */}
-      {selectedSubtopic?.taskDetail && selectedSubtopic?.evaluationChecklist && (
-        <div className="mt-6 mb-2">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold">역할 및 책임(R&R)</h3>
-            {!selectedSubtopic.rrData && (
-              <Button 
-                onClick={handleGenerateRR}
-                variant="outline"
-                size="sm"
-                className="text-blue-600 hover:text-blue-700"
-                disabled={isGeneratingRR}
-              >
-                {isGeneratingRR ? (
-                  <div className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
-                    생성 중...
-                  </div>
-                ) : (
-                  "R&R 생성"
-                )}
-              </Button>
-            )}
-          </div>
-          
-          {selectedSubtopic.rrData ? (
-            <div className="space-y-4">
-              {selectedSubtopic.rrData.map((item, idx) => (
-                <div 
-                  key={idx} 
-                  className="p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-200 transition-colors duration-200"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                      <span className="text-blue-600 text-sm font-semibold">{idx + 1}</span>
-                    </div>
-                    <div className="space-y-2 flex-grow">
-                      <h4 className="font-semibold text-blue-700">{item.role}</h4>
-                      <p className="text-gray-700">{item.responsibility}</p>
-                      <p className="text-gray-500 text-sm bg-gray-50 p-2 rounded">
-                        <span className="font-medium">이유: </span>
-                        {item.reason}
-                      </p>
-                    </div>
-                  </div>
+          <SheetHeader>
+            {isEditing ? (
+              <div className="space-y-4">
+                <input
+                  type="text"
+                  value={editedName}
+                  onChange={(e) => setEditedName(e.target.value)}
+                  className="text-2xl w-full p-2 border rounded-md font-bold"
+                />
+                <textarea
+                  value={editedDetails}
+                  onChange={(e) => setEditedDetails(e.target.value)}
+                  className="w-full p-2 border rounded-md min-h-[100px] text-gray-700"
+                  placeholder="상세 내용을 입력하세요..."
+                />
+                <div className="flex gap-2">
+                  <Button onClick={handleSave} className="flex-1">
+                    저장
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setIsEditing(false);
+                      setEditedName(selectedSubtopic?.name || "");
+                      setEditedDetails(selectedSubtopic?.details || "");
+                    }}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    취소
+                  </Button>
                 </div>
-              ))}
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-between items-center">
+                  <SheetTitle className="text-2xl mt-4 font-bold">
+                    {selectedSubtopic?.name}
+                  </SheetTitle>
+                  <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">
+                    수정
+                  </Button>
+                </div>
+                <SheetDescription className="mb-2 text-gray-700">
+                  {selectedSubtopic?.details}
+                </SheetDescription>
+              </>
+            )}
+          </SheetHeader>
+
+          {isLoadingDetail ? (
+            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+              <p className="text-sm text-gray-500">상세 정보를 불러오는 중...</p>
             </div>
           ) : (
-            <div className="text-center py-8 bg-gray-50 rounded-lg">
-              <p className="text-gray-500 text-sm">
-                R&R을 생성하여 이 작업에 필요한 역할과 책임을 확인하세요.
-              </p>
-            </div>
+            <>
+              {/* GPT가 생성한 Task 상세 설명이 있다면 출력 */}
+              {selectedSubtopic?.["taskDetail"] && (
+                <div className="mt-6 mb-2 p-3 bg-gray-50 rounded-md">
+                  <h3 className="text-lg font-semibold mb-2">Task 상세 설명</h3>
+                  <p className="text-gray-700 whitespace-pre-line">
+                    {selectedSubtopic["taskDetail"]}
+                  </p>
+                </div>
+              )}
+
+              {/* GPT가 생성한 체크리스트가 있다면 출력 */}
+              {selectedSubtopic?.["evaluationChecklist"] && (
+                <div className="mt-6 mb-2 p-3 bg-gray-50 rounded-md">
+                  <h3 className="text-lg font-semibold mb-2">평가기준 체크리스트</h3>
+                  <ul className="list-disc pl-6 text-gray-700">
+                    {(selectedSubtopic["evaluationChecklist"] as string[]).map(
+                      (item, i) => (
+                        <li key={i}>{item}</li>
+                      )
+                    )}
+                  </ul>
+                </div>
+              )}
+
+              {/* R&R 섹션 */}
+              {selectedSubtopic?.taskDetail && selectedSubtopic?.evaluationChecklist && (
+                <div className="mt-6 mb-2">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold">역할 및 책임(R&R)</h3>
+                    {!selectedSubtopic.rrData && (
+                      <Button 
+                        onClick={handleGenerateRR}
+                        variant="outline"
+                        size="sm"
+                        className="text-blue-600 hover:text-blue-700"
+                        disabled={isGeneratingRR}
+                      >
+                        {isGeneratingRR ? (
+                          <div className="flex items-center gap-2">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
+                            생성 중...
+                          </div>
+                        ) : (
+                          "R&R 생성"
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {selectedSubtopic.rrData ? (
+                    <div className="space-y-4">
+                      {selectedSubtopic.rrData.map((item, idx) => (
+                        <div 
+                          key={idx} 
+                          className="p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-200 transition-colors duration-200"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                              <span className="text-blue-600 text-sm font-semibold">{idx + 1}</span>
+                            </div>
+                            <div className="space-y-2 flex-grow">
+                              <h4 className="font-semibold text-blue-700">{item.role}</h4>
+                              <p className="text-gray-700">{item.responsibility}</p>
+                              <p className="text-gray-500 text-sm bg-gray-50 p-2 rounded">
+                                <span className="font-medium">이유: </span>
+                                {item.reason}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 bg-gray-50 rounded-lg">
+                      <p className="text-gray-500 text-sm">
+                        R&R을 생성하여 이 작업에 필요한 역할과 책임을 확인하세요.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 링크들 */}
+              {selectedSubtopic?.links && selectedSubtopic.links.length > 0 && (
+                <div className="mt-8">
+                  <h3 className="text-xl font-semibold mb-2">Learn More</h3>
+                  <div className="space-y-2 mt-4">
+                    {selectedSubtopic.links.map((link: Link, index: number) => (
+                      <Button
+                        key={index}
+                        variant="outline"
+                        className="w-full justify-start rounded-md"
+                        asChild
+                      >
+                        <a
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center"
+                        >
+                          <span className="flex-shrink-0 w-6">
+                            <ExternalLink className="h-4 w-4" />
+                          </span>
+                          <span className="truncate">{link.title}</span>
+                        </a>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
-        </div>
-      )}
-
-      {/* 링크들 */}
-      {selectedSubtopic?.links && selectedSubtopic.links.length > 0 && (
-        <div className="mt-8">
-          <h3 className="text-xl font-semibold mb-2">Learn More</h3>
-          <div className="space-y-2 mt-4">
-            {selectedSubtopic.links.map((link: Link, index: number) => (
-              <Button
-                key={index}
-                variant="outline"
-                className="w-full justify-start rounded-md"
-                asChild
-              >
-                <a
-                  href={link.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center"
-                >
-                  <span className="flex-shrink-0 w-6">
-                    <ExternalLink className="h-4 w-4" />
-                  </span>
-                  <span className="truncate">{link.title}</span>
-                </a>
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
-    </>
-  )}
-</SheetContent>
-
+        </SheetContent>
       </Sheet>
     </div>
   );
