@@ -13,6 +13,16 @@ export type Subtopic = {
   details: string;
   links: Link[];
   subtopics?: Subtopic[];
+  
+  // 추가 필드
+  taskDetail?: string;
+  evaluationChecklist?: string[];
+  rrData?: {
+    role: string;
+    responsibility: string;
+    reason: string;
+  }[];
+  status?: 'not_started' | 'in_progress' | 'done' | 'skipped';
 };
 
 export const SubtopicSchema: z.ZodType<Subtopic> = z.lazy(() =>

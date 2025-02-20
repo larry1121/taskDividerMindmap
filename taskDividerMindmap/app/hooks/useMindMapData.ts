@@ -125,5 +125,5 @@ export function useMindMapData() {
     return topic || data.topic;
   };
 
-  return { data, isLoading, error, fetchMindMap, expandMap };
+  return { data, isLoading, error, fetchMindMap, expandMap, setData };
 }

@@ -34,7 +34,7 @@ import {
   HelpCircle,
   Layout,
 } from "lucide-react";
-import { convertToMarkdown, downloadJson } from "@/lib/utils";
+import { convertToMarkdown, downloadJson, updateSubtopicData } from "@/lib/utils";
 import MindMapLegend from "./MindMapLegend";
 import { motion, AnimatePresence } from "framer-motion";
 import Credits from "./Credits";
@@ -79,6 +79,7 @@ interface NodeData {
 interface MindMapProps {
   data: { topic: string; subtopics: Subtopic[] } | null;
   onExpandMap: (nodeId: string) => Promise<void>;
+  setData: React.Dispatch<React.SetStateAction<MindMapData | null>>;
 }
 
 const NodeContent: React.FC<{
@@ -216,6 +217,10 @@ const createNodesAndEdges = (
       onClick: () => {},
       onExpand: () => onExpand(nodeId, parentId),
       nodeId,
+      taskDetail: data.taskDetail,
+      evaluationChecklist: data.evaluationChecklist,
+      rrData: data.rrData,
+      status: data.status,
     },
   });
 
@@ -257,7 +262,7 @@ const createNodesAndEdges = (
   return { nodes, edges };
 };
 
-const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
+const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap, setData }) => {
   const [selectedSubtopic, setSelectedSubtopic] = useState<Subtopic | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [expandingNodes, setExpandingNodes] = useState<Set<string>>(new Set());
@@ -281,46 +286,40 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
    */
   const handleNodeClickDetail = useCallback(
     async (node: Node) => {
-      if (!node) return;
-  
-      // 1. 먼저 Sheet 열기 (기본 데이터로)
+      if (!data) return;
+      
       openSheet(node);
       
-      // 2. 이미 상세정보가 있다면 추가 요청하지 않음
       if ((node.data as any)?.taskDetail && node.data.links?.length > 0) {
         return;
       }
-  
+
       try {
         setIsLoadingDetail(true);
-  
-        // 3. Task 상세 정보 가져오기
+
         const detailRes = await fetch("/api/generate-detail", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ topic: node.data.name , nodeId: node.id }),
+          body: JSON.stringify({ topic: node.data.name, nodeId: node.id }),
         });
         
         if (!detailRes.ok) throw new Error("Failed to fetch task details");
         const { taskDetail, evaluationChecklist } = await detailRes.json();
-  
-        // 4. 링크가 없는 경우에만 링크 검색
+
         let links = node.data.links || [];
         if (links.length === 0) {
           const searchRes = await fetch("/api/search-links", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-              query: `${node.data.name} 절차` 
-            }),
+            body: JSON.stringify({ query: `${node.data.name} 절차` }),
           });
           
           if (searchRes.ok) {
             links = await searchRes.json();
           }
         }
-  
-        // 5. 노드 데이터 업데이트
+
+        // 노드 데이터 업데이트
         setNodes((prevNodes) =>
           prevNodes.map((n) => {
             if (n.id === node.id) {
@@ -337,24 +336,35 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
             return n;
           })
         );
-  
-        // 6. selectedSubtopic 업데이트
-        setSelectedSubtopic((prev) => 
-          prev ? {
+
+        // data 상태 업데이트
+        setData((prevData) => {
+          if (!prevData) return null;
+          return updateSubtopicData(prevData, node.id, {
+            taskDetail,
+            evaluationChecklist,
+            links,
+          });
+        });
+
+        // selectedSubtopic 업데이트 추가
+        setSelectedSubtopic((prev) => {
+          if (!prev) return null;
+          return {
             ...prev,
             taskDetail,
             evaluationChecklist,
             links,
-          } : null
-        );
-  
+          };
+        });
+
       } catch (err) {
         console.error(err);
       } finally {
         setIsLoadingDetail(false);
       }
     },
-    [setNodes]
+    [data, setNodes, setData]
   );
   
 
@@ -638,6 +648,14 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
         })
       );
 
+      // data 상태 업데이트 추가
+      setData((prevData) => {
+        if (!prevData) return null;
+        return updateSubtopicData(prevData, selectedSubtopic.nodeId, {
+          rrData,
+        });
+      });
+
       // selectedSubtopic 업데이트
       setSelectedSubtopic((prev) => 
         prev ? { ...prev, rrData } : null
@@ -648,7 +666,7 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
     } finally {
       setIsGeneratingRR(false);
     }
-  }, [selectedSubtopic, setNodes]);
+  }, [selectedSubtopic, setNodes, setData]);
 
   if (!data) return null;
 

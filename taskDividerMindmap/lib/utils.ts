@@ -89,3 +89,36 @@ export const validateMindMapData = async (
   data.subtopics = await Promise.all(data.subtopics.map(validateLinks));
   return data;
 };
+
+export const updateSubtopicData = (
+  data: MindMapData,
+  nodeId: string,
+  newFields: Partial<Subtopic>
+): MindMapData => {
+  const updateRecursive = (subtopics: Subtopic[]): Subtopic[] => {
+    return subtopics.map(subtopic => {
+      const currentNodeId = subtopic.name.replace(/\s+/g, "-");
+      
+      if (nodeId === currentNodeId || nodeId.endsWith(`-${currentNodeId}`)) {
+        return {
+          ...subtopic,
+          ...newFields,
+        };
+      }
+      
+      if (subtopic.subtopics?.length) {
+        return {
+          ...subtopic,
+          subtopics: updateRecursive(subtopic.subtopics),
+        };
+      }
+      
+      return subtopic;
+    });
+  };
+
+  return {
+    ...data,
+    subtopics: updateRecursive(data.subtopics),
+  };
+};
