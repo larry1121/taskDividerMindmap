@@ -56,6 +56,25 @@ import dynamic from "next/dynamic";
 import "reactflow/dist/base.css";
 import NodeLoadingOverlay from "./NodeLoadingOverlay";
 
+
+interface NodeData {
+  name: string;
+  details: string;
+  onClick: () => void;
+  onExpand: () => void;
+  isExpanded: boolean;
+  hasChildren: boolean;
+  isRoot: boolean;
+  onExpandMap: (nodeId: string) => Promise<void>;
+  nodeId: string;
+  onDelete: (nodeId: string) => void;
+  isExpanding?: boolean;
+  setExpandingNodes: React.Dispatch<React.SetStateAction<Set<string>>>;
+  taskDetail?: string;
+  evaluationChecklist?: string[];
+  rrData?: RRItem[];  // R&R 데이터 추가
+}
+
 interface MindMapProps {
   data: { topic: string; subtopics: Subtopic[] } | null;
   onExpandMap: (nodeId: string) => Promise<void>;
@@ -251,6 +270,7 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isPositionChanging, setIsPositionChanging] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false); // 로딩 상태 추가
+  const [isGeneratingRR, setIsGeneratingRR] = useState(false);
 
   const reactFlowInstance = useReactFlow();
 
@@ -560,6 +580,52 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
     return () => clearTimeout(tid);
   }, [data, isDragging, isEditing, isPositionChanging, handleArrangeNodes]);
 
+  const handleGenerateRR = useCallback(async () => {
+    if (!selectedSubtopic?.taskDetail || !selectedSubtopic?.evaluationChecklist) return;
+
+    try {
+      setIsGeneratingRR(true);
+      const response = await fetch("/api/generate-rr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskDetail: selectedSubtopic.taskDetail,
+          evaluationChecklist: selectedSubtopic.evaluationChecklist
+        }),
+      });
+
+      if (!response.ok) throw new Error("R&R 생성 실패");
+
+      const rrData = await response.json();
+
+      // 노드 데이터 업데이트
+      setNodes((prevNodes) =>
+        prevNodes.map((node) => {
+          if (node.id === selectedSubtopic.nodeId) {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                rrData,
+              },
+            };
+          }
+          return node;
+        })
+      );
+
+      // selectedSubtopic 업데이트
+      setSelectedSubtopic((prev) => 
+        prev ? { ...prev, rrData } : null
+      );
+
+    } catch (err) {
+      console.error("R&R 생성 중 오류:", err);
+    } finally {
+      setIsGeneratingRR(false);
+    }
+  }, [selectedSubtopic, setNodes]);
+
   if (!data) return null;
 
   return (
@@ -769,6 +835,64 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
               )
             )}
           </ul>
+        </div>
+      )}
+
+      {/* R&R 섹션 */}
+      {selectedSubtopic?.taskDetail && selectedSubtopic?.evaluationChecklist && (
+        <div className="mt-6 mb-2">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold">역할 및 책임(R&R)</h3>
+            {!selectedSubtopic.rrData && (
+              <Button 
+                onClick={handleGenerateRR}
+                variant="outline"
+                size="sm"
+                className="text-blue-600 hover:text-blue-700"
+                disabled={isGeneratingRR}
+              >
+                {isGeneratingRR ? (
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
+                    생성 중...
+                  </div>
+                ) : (
+                  "R&R 생성"
+                )}
+              </Button>
+            )}
+          </div>
+          
+          {selectedSubtopic.rrData ? (
+            <div className="space-y-4">
+              {selectedSubtopic.rrData.map((item, idx) => (
+                <div 
+                  key={idx} 
+                  className="p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-200 transition-colors duration-200"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                      <span className="text-blue-600 text-sm font-semibold">{idx + 1}</span>
+                    </div>
+                    <div className="space-y-2 flex-grow">
+                      <h4 className="font-semibold text-blue-700">{item.role}</h4>
+                      <p className="text-gray-700">{item.responsibility}</p>
+                      <p className="text-gray-500 text-sm bg-gray-50 p-2 rounded">
+                        <span className="font-medium">이유: </span>
+                        {item.reason}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 bg-gray-50 rounded-lg">
+              <p className="text-gray-500 text-sm">
+                R&R을 생성하여 이 작업에 필요한 역할과 책임을 확인하세요.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

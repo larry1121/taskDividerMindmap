@@ -113,3 +113,40 @@ An example JSON schema looks like this
 Please respond according to the above schema.
 Generate a task description and evaluation criteria checklist for the following task:
 `;
+
+
+export function rnrPrompt(taskDetail: string, evaluationChecklist: string[]): string {
+  return `
+다음 정보를 읽고, 본 작업(Task)에 필요한 Roles(역할) 및 Responsibilities(책임)을 간단하게 생성해 주세요. 
+결과는 JSON 배열 형태이고, 최종 답변은 반드시 한국어여야 합니다.
+
+*[Task Details]* 
+${taskDetail}
+
+*[Evaluation Criteria]* 
+${evaluationChecklist.join("\n")}
+
+아래 조건에 따라 R&R을 JSON 포맷으로 생성해주세요:
+
+1. 각 role과 responsibility를 명확하게 기재
+2. 평가 기준(evaluation criteria)을 반영해 성과 측정이 가능하도록 작성
+3. 업무 목표에 필요한 기술, 협업 방법 등 중요 포인트 반영
+4. roles 배열 안에 역할 정보를 담은 객체들을 포함
+5. 각 역할 객체는 "role", "responsibility", "reason" 키를 포함
+6. "reason"에는 이 역할/책임이 필요한 이유를, 위 Task Details 및 Evaluation Criteria와 연결지어 간단히 작성
+
+예시:
+{
+  "roles": [
+    {
+      "role": "고객 상담 및 요구사항 분석",
+      "responsibility": "고객 문의에 신속하게 대응하고, 요구사항을 정확하게 파악하여 적절한 해결 방안을 제시함.",
+      "reason": "업무의 주요 목표인 고객 만족과 효율적인 문제 해결을 위해 이 역할을 설정함."
+    }
+  ]
+}
+
+출력은 위와 같은 형식의 JSON 객체여야 합니다.
+
+  `;
+}

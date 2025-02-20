@@ -58,3 +58,19 @@ export const NodeDetailResponseSchema = z.object({
 });
 
 export type NodeDetailResponse = z.infer<typeof NodeDetailResponseSchema>;
+
+
+export type RRArray = z.infer<typeof RRArraySchema>;
+
+// 기존 배열 스키마를 객체로 감싸기
+export const RRResponseSchema = z.object({
+  roles: z.array(
+    z.object({
+      role: z.string(),
+      responsibility: z.string(),
+      reason: z.string(),
+    })
+  )
+});
+
+export type RRResponse = z.infer<typeof RRResponseSchema>;
