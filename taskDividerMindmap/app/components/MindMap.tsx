@@ -424,7 +424,7 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
       0,
       0,
       0,
-      300,
+      600, // 300에서으 600로 변경
       200,
       expandedNodes,
       handleExpandNode
@@ -523,7 +523,7 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
     assignLevel(rootNode.id, 0);
 
     const newNodes = [...nodes];
-    const horizontalSpacing = 300;
+    const horizontalSpacing = 600;
     const verticalSpacing = 150;
 
     Object.entries(nodesByLevel).forEach(([level, levelNodes]) => {
