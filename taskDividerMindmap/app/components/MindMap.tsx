@@ -55,7 +55,7 @@ import {
 import dynamic from "next/dynamic";
 import "reactflow/dist/base.css";
 import NodeLoadingOverlay from "./NodeLoadingOverlay";
-
+import StatusUpdater from "./StatusUpdater";
 
 interface NodeData {
   name: string;
@@ -73,6 +73,7 @@ interface NodeData {
   taskDetail?: string;
   evaluationChecklist?: string[];
   rrData?: RRItem[];  // R&R 데이터 추가
+  status?: 'not_started' | 'in_progress' | 'done' | 'skipped';
 }
 
 interface MindMapProps {
@@ -950,9 +951,35 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
             ) : (
               <>
                 <div className="flex justify-between items-center">
-                  <SheetTitle className="text-2xl mt-4 font-bold">
-                    {selectedSubtopic?.name}
-                  </SheetTitle>
+                <div>
+      <SheetTitle className="text-2xl mt-4 font-bold">
+        {selectedSubtopic?.name}
+      </SheetTitle>
+      <div className="mt-2">
+        <StatusUpdater 
+          status={selectedSubtopic?.status || 'not_started'} 
+          onStatusChange={(newStatus) => {
+            setNodes((prevNodes) =>
+              prevNodes.map((node) => {
+                if (node.id === selectedSubtopic?.nodeId) {
+                  return {
+                    ...node,
+                    data: {
+                      ...node.data,
+                      status: newStatus,
+                    },
+                  };
+                }
+                return node;
+              })
+            );
+            setSelectedSubtopic((prev) =>
+              prev ? { ...prev, status: newStatus } : null
+            );
+          }}
+        />
+      </div>
+    </div>
                   <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">
                     수정
                   </Button>

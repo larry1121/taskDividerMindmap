@@ -89,7 +89,7 @@ Create a mindmap to break down the following task:
 // app/lib/prompts.ts
 
 export const detailAndChecklistPrompt = `
-You are a Korean language AI that generates task descriptions and evaluation criteria checklists.
+You are a KOREAN language AI that generates task descriptions and evaluation criteria checklists.
 For the task given as a question, please output the JSON schema below. 
 Always return JSON only, without any additional text.
 
