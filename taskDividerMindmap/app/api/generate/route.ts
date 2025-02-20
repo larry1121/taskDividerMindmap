@@ -13,12 +13,15 @@ import { z } from "zod";
 
 const USE_LOCAL_MODELS = process.env.NEXT_PUBLIC_USE_LOCAL_MODELS === "true";
 const LOCAL_MODEL = "llama3.1";
-const EXTERNAL_MODEL = "gpt-4o";
+const EXTERNAL_MODEL = "o3-mini-2025-01-31";
 
 const getModel = (useLocalModel: boolean) =>
   useLocalModel
     ? ollama(LOCAL_MODEL)
-    : openai(EXTERNAL_MODEL, { structuredOutputs: true });
+    : openai(EXTERNAL_MODEL, { 
+        structuredOutputs: true,
+        completionParams: {}
+      });
 
 const getPrompt = (useLocalModel: boolean, topic: string, nodeId?: string) => {
   const basePrompt = useLocalModel ? defaultLocalPrompt : defaultExternalPrompt;

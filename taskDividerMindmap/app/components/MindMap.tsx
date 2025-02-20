@@ -250,6 +250,7 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
   const [editedDetails, setEditedDetails] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [isPositionChanging, setIsPositionChanging] = useState(false);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false); // 로딩 상태 추가
 
   const reactFlowInstance = useReactFlow();
 
@@ -260,28 +261,25 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
   const handleNodeClickDetail = useCallback(
     async (node: Node) => {
       if (!node) return;
-
+  
       // 이미 한 번 상세정보를 불러온 노드인지 체크
       if ((node.data as any)?.taskDetail) {
         // 기존 정보를 그대로 Sheet에 표시
         openSheet(node);
         return;
       }
-
+  
       try {
-        setIsLoading(true);
-
+        setIsLoadingDetail(true); // 로딩 시작
+  
         // /api/generate-detail에 POST
         const res = await fetch("/api/generate-detail", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            topic: node.data.name,
-            nodeId: node.id 
-          }),
+          body: JSON.stringify({ topic: node.data.name }),
         });
         if (!res.ok) throw new Error("Failed to fetch task details");
-
+  
         const { taskDetail, evaluationChecklist } = await res.json();
         // node.data에 상세정보 저장
         setNodes((prevNodes) =>
@@ -299,7 +297,7 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
             return n;
           })
         );
-
+  
         // Sheet 열기
         openSheet({
           ...node,
@@ -312,11 +310,13 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
       } catch (err) {
         console.error(err);
       } finally {
-        setIsLoading(false);
+        setIsLoadingDetail(false); // 로딩 종료
       }
     },
     [setNodes]
   );
+  
+
 
   /** Sheet에 선택된 노드 정보를 표시하는 로직 */
   const openSheet = (node: Node) => {
@@ -692,108 +692,118 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
         }}
       >
         <SheetContent className="overflow-y-auto">
-          <SheetHeader>
-            {isEditing ? (
-              <div className="space-y-4">
-                <input
-                  type="text"
-                  value={editedName}
-                  onChange={(e) => setEditedName(e.target.value)}
-                  className="text-2xl w-full p-2 border rounded-md font-bold"
-                />
-                <textarea
-                  value={editedDetails}
-                  onChange={(e) => setEditedDetails(e.target.value)}
-                  className="w-full p-2 border rounded-md min-h-[100px] text-gray-700"
-                  placeholder="상세 내용을 입력하세요..."
-                />
-                <div className="flex gap-2">
-                  <Button onClick={handleSave} className="flex-1">
-                    저장
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setIsEditing(false);
-                      setEditedName(selectedSubtopic?.name || "");
-                      setEditedDetails(selectedSubtopic?.details || "");
-                    }}
-                    variant="outline"
-                    className="flex-1"
-                  >
-                    취소
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="flex justify-between items-center">
-                  <SheetTitle className="text-2xl mt-4 font-bold">
-                    {selectedSubtopic?.name}
-                  </SheetTitle>
-                  <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">
-                    수정
-                  </Button>
-                </div>
-                <SheetDescription className="mb-2 text-gray-700">
-                  {selectedSubtopic?.details}
-                </SheetDescription>
-              </>
+  <SheetHeader>
+    {isEditing ? (
+      <div className="space-y-4">
+        <input
+          type="text"
+          value={editedName}
+          onChange={(e) => setEditedName(e.target.value)}
+          className="text-2xl w-full p-2 border rounded-md font-bold"
+        />
+        <textarea
+          value={editedDetails}
+          onChange={(e) => setEditedDetails(e.target.value)}
+          className="w-full p-2 border rounded-md min-h-[100px] text-gray-700"
+          placeholder="상세 내용을 입력하세요..."
+        />
+        <div className="flex gap-2">
+          <Button onClick={handleSave} className="flex-1">
+            저장
+          </Button>
+          <Button
+            onClick={() => {
+              setIsEditing(false);
+              setEditedName(selectedSubtopic?.name || "");
+              setEditedDetails(selectedSubtopic?.details || "");
+            }}
+            variant="outline"
+            className="flex-1"
+          >
+            취소
+          </Button>
+        </div>
+      </div>
+    ) : (
+      <>
+        <div className="flex justify-between items-center">
+          <SheetTitle className="text-2xl mt-4 font-bold">
+            {selectedSubtopic?.name}
+          </SheetTitle>
+          <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">
+            수정
+          </Button>
+        </div>
+        <SheetDescription className="mb-2 text-gray-700">
+          {selectedSubtopic?.details}
+        </SheetDescription>
+      </>
+    )}
+  </SheetHeader>
+
+  {/* 로딩 중일 때 표시되는 로딩 화면 */}
+  {isLoadingDetail ? (
+    <div className="flex justify-center items-center h-full">
+      <div className="loader">Loading...</div> {/* 커스터마이징 가능한 로딩 애니메이션 */}
+    </div>
+  ) : (
+    <>
+      {/* GPT가 생성한 Task 상세 설명이 있다면 출력 */}
+      {selectedSubtopic?.["taskDetail"] && (
+        <div className="mt-6 mb-2 p-3 bg-gray-50 rounded-md">
+          <h3 className="text-lg font-semibold mb-2">Task 상세 설명</h3>
+          <p className="text-gray-700 whitespace-pre-line">
+            {selectedSubtopic["taskDetail"]}
+          </p>
+        </div>
+      )}
+
+      {/* GPT가 생성한 체크리스트가 있다면 출력 */}
+      {selectedSubtopic?.["evaluationChecklist"] && (
+        <div className="mt-6 mb-2 p-3 bg-gray-50 rounded-md">
+          <h3 className="text-lg font-semibold mb-2">평가기준 체크리스트</h3>
+          <ul className="list-disc pl-6 text-gray-700">
+            {(selectedSubtopic["evaluationChecklist"] as string[]).map(
+              (item, i) => (
+                <li key={i}>{item}</li>
+              )
             )}
-          </SheetHeader>
+          </ul>
+        </div>
+      )}
 
-          {/* GPT가 생성한 Task 상세 설명이 있다면 출력 */}
-          {selectedSubtopic?.["taskDetail"] && (
-            <div className="mt-6 mb-2 p-3 bg-gray-50 rounded-md">
-              <h3 className="text-lg font-semibold mb-2">Task 상세 설명</h3>
-              <p className="text-gray-700 whitespace-pre-line">
-                {selectedSubtopic["taskDetail"]}
-              </p>
-            </div>
-          )}
+      {/* 링크들 */}
+      {selectedSubtopic?.links && selectedSubtopic.links.length > 0 && (
+        <div className="mt-8">
+          <h3 className="text-xl font-semibold mb-2">Learn More</h3>
+          <div className="space-y-2 mt-4">
+            {selectedSubtopic.links.map((link: Link, index: number) => (
+              <Button
+                key={index}
+                variant="outline"
+                className="w-full justify-start rounded-md"
+                asChild
+              >
+                <a
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center"
+                >
+                  <span className="flex-shrink-0 w-6">
+                    <ExternalLink className="h-4 w-4" />
+                  </span>
+                  <span className="truncate">{link.title}</span>
+                </a>
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  )}
+</SheetContent>
 
-          {/* GPT가 생성한 체크리스트가 있다면 출력 */}
-          {selectedSubtopic?.["evaluationChecklist"] && (
-            <div className="mt-6 mb-2 p-3 bg-gray-50 rounded-md">
-              <h3 className="text-lg font-semibold mb-2">평가기준 체크리스트</h3>
-              <ul className="list-disc pl-6 text-gray-700">
-                {(selectedSubtopic["evaluationChecklist"] as string[]).map(
-                  (item, i) => (
-                    <li key={i}>{item}</li>
-                  )
-                )}
-              </ul>
-            </div>
-          )}
-
-          {/* 링크들 */}
-          {selectedSubtopic?.links && selectedSubtopic.links.length > 0 && (
-            <div className="mt-8">
-              <h3 className="text-xl font-semibold mb-2">Learn More</h3>
-              <div className="space-y-2 mt-4">
-                {selectedSubtopic.links.map((link: Link, index: number) => (
-                  <Button
-                    key={index}
-                    variant="outline"
-                    className="w-full justify-start rounded-md"
-                    asChild
-                  >
-                    <a
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center"
-                    >
-                      <span className="flex-shrink-0 w-6">
-                        <ExternalLink className="h-4 w-4" />
-                      </span>
-                      <span className="truncate">{link.title}</span>
-                    </a>
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
-        </SheetContent>
       </Sheet>
     </div>
   );
