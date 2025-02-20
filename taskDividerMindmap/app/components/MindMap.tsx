@@ -297,7 +297,7 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
         const detailRes = await fetch("/api/generate-detail", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ topic: node.data.name }),
+          body: JSON.stringify({ topic: node.data.name , nodeId: node.id }),
         });
         
         if (!detailRes.ok) throw new Error("Failed to fetch task details");
@@ -310,7 +310,7 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ 
-              query: `${node.data.name} 절차 가이드` 
+              query: `${node.data.name} 절차` 
             }),
           });
           
