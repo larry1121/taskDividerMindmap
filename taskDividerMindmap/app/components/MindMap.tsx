@@ -392,6 +392,9 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
               ...node.data,
               name: editedName,
               details: editedDetails,
+              taskDetail: selectedSubtopic.taskDetail,
+              evaluationChecklist: selectedSubtopic.evaluationChecklist,
+              rrData: selectedSubtopic.rrData,
             },
           };
         }
@@ -793,6 +796,140 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
                   className="w-full p-2 border rounded-md min-h-[100px] text-gray-700"
                   placeholder="상세 내용을 입력하세요..."
                 />
+                
+                {/* Task 상세 설명 수정 */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Task 상세 설명</label>
+                  <textarea
+                    value={selectedSubtopic?.taskDetail || ""}
+                    onChange={(e) => setSelectedSubtopic(prev => 
+                      prev ? { ...prev, taskDetail: e.target.value } : null
+                    )}
+                    className="w-full p-2 border rounded-md min-h-[150px] text-gray-700"
+                    placeholder="Task 상세 설명을 입력하세요..."
+                  />
+                </div>
+
+                {/* 평가기준 체크리스트 수정 */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">평가기준 체크리스트</label>
+                  <div className="space-y-2">
+                    {selectedSubtopic?.evaluationChecklist?.map((item, index) => (
+                      <div key={index} className="flex gap-2">
+                        <input
+                          type="text"
+                          value={item}
+                          onChange={(e) => {
+                            const newChecklist = [...(selectedSubtopic?.evaluationChecklist || [])];
+                            newChecklist[index] = e.target.value;
+                            setSelectedSubtopic(prev => 
+                              prev ? { ...prev, evaluationChecklist: newChecklist } : null
+                            );
+                          }}
+                          className="flex-1 p-2 border rounded-md text-gray-700"
+                        />
+                        <button
+                          onClick={() => {
+                            const newChecklist = selectedSubtopic?.evaluationChecklist?.filter((_, i) => i !== index);
+                            setSelectedSubtopic(prev => 
+                              prev ? { ...prev, evaluationChecklist: newChecklist } : null
+                            );
+                          }}
+                          className="p-2 text-red-500 hover:text-red-700"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => {
+                        const newChecklist = [...(selectedSubtopic?.evaluationChecklist || []), ""];
+                        setSelectedSubtopic(prev => 
+                          prev ? { ...prev, evaluationChecklist: newChecklist } : null
+                        );
+                      }}
+                      className="w-full p-2 border border-dashed rounded-md text-gray-500 hover:text-gray-700 hover:border-gray-700"
+                    >
+                      + 체크리스트 항목 추가
+                    </button>
+                  </div>
+                </div>
+
+                {/* R&R 수정 */}
+                {selectedSubtopic?.rrData && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">역할 및 책임(R&R)</label>
+                    <div className="space-y-3">
+                      {selectedSubtopic.rrData.map((item, index) => (
+                        <div key={index} className="space-y-2 p-3 border rounded-md">
+                          <input
+                            type="text"
+                            value={item.role}
+                            onChange={(e) => {
+                              const newRRData = [...selectedSubtopic.rrData];
+                              newRRData[index] = { ...newRRData[index], role: e.target.value };
+                              setSelectedSubtopic(prev => 
+                                prev ? { ...prev, rrData: newRRData } : null
+                              );
+                            }}
+                            className="w-full p-2 border rounded-md text-gray-700"
+                            placeholder="역할"
+                          />
+                          <textarea
+                            value={item.responsibility}
+                            onChange={(e) => {
+                              const newRRData = [...selectedSubtopic.rrData];
+                              newRRData[index] = { ...newRRData[index], responsibility: e.target.value };
+                              setSelectedSubtopic(prev => 
+                                prev ? { ...prev, rrData: newRRData } : null
+                              );
+                            }}
+                            className="w-full p-2 border rounded-md text-gray-700"
+                            placeholder="책임"
+                          />
+                          <textarea
+                            value={item.reason}
+                            onChange={(e) => {
+                              const newRRData = [...selectedSubtopic.rrData];
+                              newRRData[index] = { ...newRRData[index], reason: e.target.value };
+                              setSelectedSubtopic(prev => 
+                                prev ? { ...prev, rrData: newRRData } : null
+                              );
+                            }}
+                            className="w-full p-2 border rounded-md text-gray-700"
+                            placeholder="이유"
+                          />
+                          <button
+                            onClick={() => {
+                              const newRRData = selectedSubtopic.rrData.filter((_, i) => i !== index);
+                              setSelectedSubtopic(prev => 
+                                prev ? { ...prev, rrData: newRRData } : null
+                              );
+                            }}
+                            className="w-full p-2 text-red-500 hover:text-red-700"
+                          >
+                            R&R 항목 삭제
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => {
+                          const newRRData = [
+                            ...(selectedSubtopic.rrData || []),
+                            { role: "", responsibility: "", reason: "" }
+                          ];
+                          setSelectedSubtopic(prev => 
+                            prev ? { ...prev, rrData: newRRData } : null
+                          );
+                        }}
+                        className="w-full p-2 border border-dashed rounded-md text-gray-500 hover:text-gray-700 hover:border-gray-700"
+                      >
+                        + R&R 항목 추가
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-2">
                   <Button onClick={handleSave} className="flex-1">
                     저장
