@@ -75,16 +75,11 @@ You are an KOREAN AI assistant specialized in breaking down large tasks into sma
 
 Ensure that each major task is divided into logical and sequential subtasks, with dependencies clearly indicated where necessary. The breakdown should be as detailed as possible, ensuring each subtask is well-defined and achievable.
 
-Include suggested reliable sources such as books, blog posts, websites, and other relevant resources in the "links" section of the JSON structure to help users understand and complete each subtask effectively.
-
 The mindmap should include:
-- A central node representing the main task.
-- Major sub-tasks branching from the central node.
 - Further breakdowns of each sub-task into smaller actionable steps.
-- Dependencies between tasks, if applicable.
-- Suggested resources in the "links" section.
-- including only links to existing.
+- Dependencies between tasks, if applicable..
 - name of subtopics should be different from the parent topic.
+- Leave the link item blank
 
 Always ensure the mindmap is as detailed as possible, adding as many nodes and subtopics as needed for a comprehensive breakdown.
 
@@ -117,36 +112,26 @@ Generate a task description and evaluation criteria checklist for the following 
 
 export function rnrPrompt(taskDetail: string, evaluationChecklist: string[]): string {
   return `
-다음 정보를 읽고, 본 작업(Task)에 필요한 Roles(역할) 및 Responsibilities(책임)을 간단하게 생성해 주세요. 
-결과는 JSON 배열 형태이고, 최종 답변은 반드시 한국어여야 합니다.
+Read the following information and generate the necessary Roles and Responsibilities for this Task in a simplified format.
+The result should be in a JSON array, and the final answer must be in Korean.
 
-*[Task Details]* 
+[Task Details]
 ${taskDetail}
 
-*[Evaluation Criteria]* 
+[Evaluation Criteria]
 ${evaluationChecklist.join("\n")}
 
-아래 조건에 따라 R&R을 JSON 포맷으로 생성해주세요:
+Generate the R&R in JSON format according to the following conditions:
 
-1. 각 role과 responsibility를 명확하게 기재
-2. 평가 기준(evaluation criteria)을 반영해 성과 측정이 가능하도록 작성
-3. 업무 목표에 필요한 기술, 협업 방법 등 중요 포인트 반영
-4. roles 배열 안에 역할 정보를 담은 객체들을 포함
-5. 각 역할 객체는 "role", "responsibility", "reason" 키를 포함
-6. "reason"에는 이 역할/책임이 필요한 이유를, 위 Task Details 및 Evaluation Criteria와 연결지어 간단히 작성
+Clearly specify each role and responsibility.
+Write it in a way that performance can be measured, reflecting the evaluation criteria.
+Include important points such as necessary skills, collaboration methods, etc., based on the task goal.
+The "roles" array should include objects with role information.
+Each role object must contain the keys "role", "responsibility", and "reason."
+In "reason," briefly explain why this role/responsibility is necessary, linking it to the Task Details and Evaluation Criteria.
+Example: { "roles": [ { "role": "Customer Support and Requirement Analysis", "responsibility": "Respond promptly to customer inquiries and accurately understand the requirements to offer appropriate solutions.", "reason": "This role is set to achieve the main goal of customer satisfaction and efficient problem-solving." } ] }
 
-예시:
-{
-  "roles": [
-    {
-      "role": "고객 상담 및 요구사항 분석",
-      "responsibility": "고객 문의에 신속하게 대응하고, 요구사항을 정확하게 파악하여 적절한 해결 방안을 제시함.",
-      "reason": "업무의 주요 목표인 고객 만족과 효율적인 문제 해결을 위해 이 역할을 설정함."
-    }
-  ]
-}
-
-출력은 위와 같은 형식의 JSON 객체여야 합니다.
+The output must be in the same JSON object format as the example above.
 
   `;
 }

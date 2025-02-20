@@ -282,26 +282,42 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
     async (node: Node) => {
       if (!node) return;
   
-      // 이미 한 번 상세정보를 불러온 노드인지 체크
-      if ((node.data as any)?.taskDetail) {
-        // 기존 정보를 그대로 Sheet에 표시
+      // 이미 상세정보와 링크가 있는 경우 Sheet만 열기
+      if ((node.data as any)?.taskDetail && node.data.links?.length > 0) {
         openSheet(node);
         return;
       }
   
       try {
-        setIsLoadingDetail(true); // 로딩 시작
+        setIsLoadingDetail(true);
   
-        // /api/generate-detail에 POST
-        const res = await fetch("/api/generate-detail", {
+        // 1. Task 상세 정보 가져오기
+        const detailRes = await fetch("/api/generate-detail", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ topic: node.data.name }),
         });
-        if (!res.ok) throw new Error("Failed to fetch task details");
+        
+        if (!detailRes.ok) throw new Error("Failed to fetch task details");
+        const { taskDetail, evaluationChecklist } = await detailRes.json();
   
-        const { taskDetail, evaluationChecklist } = await res.json();
-        // node.data에 상세정보 저장
+        // 2. 링크가 없는 경우에만 링크 검색
+        let links = node.data.links || [];
+        if (links.length === 0) {
+          const searchRes = await fetch("/api/search-links", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+              query: `${node.data.name} 절차 가이드` 
+            }),
+          });
+          
+          if (searchRes.ok) {
+            links = await searchRes.json();
+          }
+        }
+  
+        // 3. 노드 데이터 업데이트
         setNodes((prevNodes) =>
           prevNodes.map((n) => {
             if (n.id === node.id) {
@@ -311,6 +327,7 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
                   ...n.data,
                   taskDetail,
                   evaluationChecklist,
+                  links,
                 },
               };
             }
@@ -318,19 +335,20 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap }) => {
           })
         );
   
-        // Sheet 열기
+        // 4. Sheet 열기
         openSheet({
           ...node,
           data: {
             ...node.data,
             taskDetail,
             evaluationChecklist,
+            links,
           },
         });
       } catch (err) {
         console.error(err);
       } finally {
-        setIsLoadingDetail(false); // 로딩 종료
+        setIsLoadingDetail(false);
       }
     },
     [setNodes]
