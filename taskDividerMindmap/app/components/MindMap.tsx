@@ -12,7 +12,6 @@ import ReactFlow, {
   useNodesState,
   useEdgesState,
   MiniMap,
-  ReactFlowInstance,
   useReactFlow,
   NodeChange,
 } from "reactflow";
@@ -52,8 +51,6 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import dynamic from "next/dynamic";
-import "reactflow/dist/base.css";
 import NodeLoadingOverlay from "./NodeLoadingOverlay";
 import StatusUpdater from "./StatusUpdater";
 
@@ -264,7 +261,7 @@ const createNodesAndEdges = (
 
 const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap, setData }) => {
   const [selectedSubtopic, setSelectedSubtopic] = useState<Subtopic | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading] = useState(false);
   const [expandingNodes, setExpandingNodes] = useState<Set<string>>(new Set());
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [nodes, setNodes, onNodesChange] = useNodesState([]);

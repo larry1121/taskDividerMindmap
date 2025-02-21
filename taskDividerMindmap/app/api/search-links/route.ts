@@ -16,7 +16,7 @@ interface SearchResult {
 }
 
 // 검색 결과의 연관성을 계산하는 함수
-function calculateRelevance(query: string, item: any): number {
+function calculateRelevance(query: string, item: GoogleSearchItem): number {
   const searchTerms = query.toLowerCase().split(' ');
   let score = 0;
 

@@ -138,20 +138,19 @@ export async function POST(req: Request) {
   }
 }
 
+interface SubtopicMapItem {
+  name: string;
+  details: string;
+  links: Link[];
+  subtopics: Subtopic[];
+  id: string;
+  parentId: string | null;
+}
+
 function reconstructNestedStructure(
   flatSubtopics: z.infer<typeof FlatSubtopicSchema>[]
 ): Subtopic[] {
-  const subtopicMap = new Map<
-    string,
-    {
-      name: string;
-      details: string;
-      links: any[];
-      subtopics: any[];
-      id: string;
-      parentId: string | null;
-    }
-  >();
+  const subtopicMap = new Map<string, SubtopicMapItem>();
 
   flatSubtopics.forEach((subtopic) => {
     subtopicMap.set(subtopic.id, {
@@ -164,7 +163,7 @@ function reconstructNestedStructure(
     });
   });
 
-  const rootNodes: any[] = [];
+  const rootNodes: Subtopic[] = [];
   flatSubtopics.forEach((subtopic) => {
     const node = subtopicMap.get(subtopic.id);
     if (!node) return;
@@ -183,21 +182,7 @@ function reconstructNestedStructure(
     parent.subtopics.push(node);
   });
 
-  type NestedSubtopic = {
-    name: string;
-    details: string;
-    links: Array<{
-      title: string;
-      type: string;
-      url: string;
-    }>;
-    subtopics: NestedSubtopic[];
-    id: string;
-    parentId: string | null;
-  };
-
-  const cleanNode = (node: NestedSubtopic): Subtopic => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const cleanNode = (node: any): Subtopic => {
     const { id, parentId, ...cleanedNode } = node;
     return {
       ...cleanedNode,
