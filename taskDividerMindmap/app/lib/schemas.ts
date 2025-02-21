@@ -36,7 +36,20 @@ export const SubtopicSchema: z.ZodType<Subtopic> = z.lazy(() =>
 
 export const MindMapSchema = z.object({
   topic: z.string(),
+  name: z.string(),
+  details: z.string(),
+  links: z.array(LinkSchema),
   subtopics: z.array(SubtopicSchema),
+  taskDetail: z.string().optional(),
+  evaluationChecklist: z.array(z.string()).optional(),
+  rrData: z.array(
+    z.object({
+      role: z.string(),
+      responsibility: z.string(),
+      reason: z.string(),
+    })
+  ).optional(),
+  status: z.enum(['not_started', 'in_progress', 'done', 'skipped']).optional(),
 });
 
 export const FlatSubtopicSchema = z.object({

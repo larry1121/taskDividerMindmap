@@ -108,7 +108,14 @@ export async function POST(req: Request) {
 
     const nestedMindMapData = {
       topic: flatMindMapData.topic,
+      name: flatMindMapData.topic,
+      details: "",
+      links: [],
       subtopics: reconstructNestedStructure(flatMindMapData.subtopics),
+      taskDetail: "",
+      evaluationChecklist: [],
+      rrData: [],
+      status: 'not_started' as const
     };
 
     const validatedMindMapData = await validateMindMapData(nestedMindMapData);
@@ -159,7 +166,7 @@ function reconstructNestedStructure(
       taskDetail: '',
       evaluationChecklist: [],
       rrData: [],
-      status: 'not_started'
+      status: 'not_started' as const
     });
   });
 
