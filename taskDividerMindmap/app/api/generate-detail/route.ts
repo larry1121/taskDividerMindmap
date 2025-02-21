@@ -30,7 +30,7 @@ export async function POST(req: Request) {
         return new Response(JSON.stringify(parsedResponse), {
           headers: { "Content-Type": "application/json" },
         });
-      } catch (error) {
+      } catch (_error) {
         throw new Error("Failed to parse response");
       }
     }
