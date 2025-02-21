@@ -1,5 +1,5 @@
 import { ollama } from "ollama-ai-provider";
-import { generateObject } from "ai";
+import { generateObject, generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { detailAndChecklistPrompt } from "@/app/lib/prompts";  // Task 상세 + 평가기준 프롬프트
 import { NodeDetailResponseSchema } from "@/app/lib/schemas";  // Task 상세 + 체크리스트 응답 스키마
@@ -9,16 +9,11 @@ const LOCAL_MODEL = "llama3.1";
 const EXTERNAL_MODEL = "gpt-4o-mini-2024-07-18";
 
 // 모델 선택 함수
-const getModel = (useLocalModel: boolean) =>
-  useLocalModel
+function getModel(useLocalModel: boolean) {
+  return useLocalModel
     ? ollama(LOCAL_MODEL)
     : openai(EXTERNAL_MODEL, { structuredOutputs: true });
-
-// 프롬프트 생성 함수
-const getPrompt = (useLocalModel: boolean, topic: string, nodeId: string) => {
-  const basePrompt = useLocalModel ? detailAndChecklistPrompt : detailAndChecklistPrompt; // 같은 프롬프트 사용
-  return `${basePrompt}\n${topic} with node ID "${nodeId}`;
-};
+}
 
 // POST 요청 처리
 export async function POST(req: Request) {
@@ -26,19 +21,27 @@ export async function POST(req: Request) {
 
   try {
     const model = getModel(USE_LOCAL_MODELS);
-    const prompt = getPrompt(USE_LOCAL_MODELS, topic, nodeId);
+    const prompt = `${detailAndChecklistPrompt}\n${topic} with node ID "${nodeId}"`;
 
-    // GPT로부터 Task 상세 및 평가기준 체크리스트 생성
+    if (USE_LOCAL_MODELS) {
+      const response = await generateText({ model, prompt });
+      try {
+        const parsedResponse = JSON.parse(response.text);
+        return new Response(JSON.stringify(parsedResponse), {
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (error) {
+        throw new Error("Failed to parse response");
+      }
+    }
+
     const response = await generateObject({
       model,
       prompt,
       schema: NodeDetailResponseSchema,  // 세부사항과 평가기준 체크리스트 스키마
     });
 
-    const taskDetailData = response.object;
-
-    // 응답 결과 리턴
-    return new Response(JSON.stringify(taskDetailData), {
+    return new Response(JSON.stringify(response.object), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (error) {
