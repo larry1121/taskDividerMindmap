@@ -30,6 +30,7 @@ export async function POST(req: Request) {
         return new Response(JSON.stringify(parsedResponse), {
           headers: { "Content-Type": "application/json" },
         });
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       } catch (_error) {
         throw new Error("Failed to parse response");
       }
