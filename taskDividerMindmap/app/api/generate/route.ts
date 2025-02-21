@@ -182,13 +182,14 @@ function reconstructNestedStructure(
     parent.subtopics.push(node);
   });
 
-  const cleanNode = (node: any): Subtopic => {
+  function cleanNode(node: SubtopicMapItem): Subtopic {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { id, parentId, ...cleanedNode } = node;
     return {
       ...cleanedNode,
       subtopics: node.subtopics.map(cleanNode),
     };
-  };
+  }
 
   return rootNodes.map(cleanNode);
 }
