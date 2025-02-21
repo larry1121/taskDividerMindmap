@@ -1,5 +1,20 @@
 import { NextResponse } from 'next/server';
 
+interface GoogleSearchItem {
+  title: string;
+  link: string;
+  pagemap?: {
+    sitelinks?: unknown;
+  };
+}
+
+interface SearchResult {
+  title: string;
+  type: string;
+  url: string;
+  relevanceScore: number;
+}
+
 // 검색 결과의 연관성을 계산하는 함수
 function calculateRelevance(query: string, item: any): number {
   const searchTerms = query.toLowerCase().split(' ');
@@ -106,17 +121,17 @@ async function fetchLinksFromGoogle(query: string) {
   
   // 광고 필터링 및 연관성 점수 계산
   const scoredResults = data.items
-    .filter((item: any) => !item.pagemap?.sitelinks) // 광고 제외
-    .map((item: any) => ({
+    .filter((item: GoogleSearchItem) => !item.pagemap?.sitelinks)
+    .map((item: GoogleSearchItem) => ({
       ...item,
       relevanceScore: calculateRelevance(query, item)
     }));
 
   // 연관성 점수로 정렬하고 상위 3개 선택
   return scoredResults
-    .sort((a: any, b: any) => b.relevanceScore - a.relevanceScore)
+    .sort((a: SearchResult, b: SearchResult) => b.relevanceScore - a.relevanceScore)
     .slice(0, 3)
-    .map((item: any) => ({
+    .map((item: SearchResult) => ({
       title: item.title,
       type: 'website',
       url: item.link,

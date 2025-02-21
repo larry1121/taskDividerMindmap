@@ -3,7 +3,6 @@ import { generateObject } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { detailAndChecklistPrompt } from "@/app/lib/prompts";  // Task 상세 + 평가기준 프롬프트
 import { NodeDetailResponseSchema } from "@/app/lib/schemas";  // Task 상세 + 체크리스트 응답 스키마
-import { z } from "zod";
 
 const USE_LOCAL_MODELS = process.env.NEXT_PUBLIC_USE_LOCAL_MODELS === "true";
 const LOCAL_MODEL = "llama3.1";

@@ -290,7 +290,7 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap, setData }) => {
       
       openSheet(node);
       
-      if ((node.data as any)?.taskDetail && node.data.links?.length > 0) {
+      if ((node.data as NodeData)?.taskDetail && node.data.links?.length > 0) {
         return;
       }
 

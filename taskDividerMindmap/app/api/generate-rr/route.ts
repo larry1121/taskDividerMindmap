@@ -1,7 +1,6 @@
 import { openai } from "@ai-sdk/openai";
 import { ollama } from "ollama-ai-provider";
 import { generateObject } from "ai";
-import { z } from "zod";
 
 // 새로 만든 R&R 스키마 import
 import { RRResponseSchema } from "@/app/lib/schemas";

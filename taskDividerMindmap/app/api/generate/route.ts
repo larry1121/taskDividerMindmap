@@ -48,10 +48,20 @@ export async function POST(req: Request) {
           const cleanedResponse = response.text.trim();
           const lastBrace = cleanedResponse.lastIndexOf("}");
           const validJson = cleanedResponse.substring(0, lastBrace + 1);
-          let parsedResponse = JSON.parse(validJson);
+          const parsedResponse = JSON.parse(validJson);
 
           if (nodeId) {
-            const subtopics = parsedResponse.subtopics.map((st: any) => ({
+            type SubtopicResponse = {
+              name: string;
+              details: string;
+              links?: Array<{
+                title: string;
+                type: string;
+                url: string;
+              }>;
+            };
+
+            const subtopics = parsedResponse.subtopics.map((st: SubtopicResponse) => ({
               id: `${nodeId}-${st.name.replace(/\s+/g, "-")}`,
               parentId: nodeId,
               name: st.name,
@@ -173,7 +183,21 @@ function reconstructNestedStructure(
     parent.subtopics.push(node);
   });
 
-  const cleanNode = (node: any): Subtopic => {
+  type NestedSubtopic = {
+    name: string;
+    details: string;
+    links: Array<{
+      title: string;
+      type: string;
+      url: string;
+    }>;
+    subtopics: NestedSubtopic[];
+    id: string;
+    parentId: string | null;
+  };
+
+  const cleanNode = (node: NestedSubtopic): Subtopic => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { id, parentId, ...cleanedNode } = node;
     return {
       ...cleanedNode,
