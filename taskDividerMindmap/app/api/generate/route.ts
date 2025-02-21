@@ -11,14 +11,23 @@ import {
 import { validateMindMapData } from "@/lib/utils";
 import { z } from "zod";
 
+// Edge Runtime 사용 선언
+export const runtime = 'edge';
+
 const USE_LOCAL_MODELS = process.env.NEXT_PUBLIC_USE_LOCAL_MODELS === "true";
 const LOCAL_MODEL = "llama3.1";
 const EXTERNAL_MODEL = "o3-mini-2025-01-31";
 
+// API 타임아웃 설정
+const TIMEOUT_DURATION = 100000; // 100초
+
 const getModel = (useLocalModel: boolean) => {
   const model = useLocalModel
     ? ollama(LOCAL_MODEL)
-    : openai(EXTERNAL_MODEL, { structuredOutputs: true });
+    : openai(EXTERNAL_MODEL, { 
+        structuredOutputs: true,
+
+      });
   return model as ReturnType<typeof ollama>;
 };
 
@@ -28,6 +37,16 @@ const getPrompt = (useLocalModel: boolean, topic: string, nodeId?: string) => {
     return `${basePrompt}Expand the subtask "${topic}" with node ID "${nodeId}".`;
   }
   return `${basePrompt}${topic}`;
+};
+
+// 프로미스에 타임아웃 추가하는 유틸리티 함수
+const withTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error('Request timeout')), timeoutMs)
+    )
+  ]);
 };
 
 export async function POST(req: Request) {
@@ -41,7 +60,10 @@ export async function POST(req: Request) {
       z.infer<typeof FlatMindMapSchema>
     > => {
       if (USE_LOCAL_MODELS) {
-        const response = await generateText({ model, prompt });
+        const response = await withTimeout(
+          generateText({ model, prompt }),
+          TIMEOUT_DURATION
+        );
 
         try {
           const cleanedResponse = response.text.trim();
@@ -92,12 +114,16 @@ export async function POST(req: Request) {
         }
       }
 
-      const { object } = await generateObject({
-        model,
-        prompt,
-        schema: FlatMindMapSchema,
-      });
-      return object;
+      const response = await withTimeout(
+        generateObject({
+          model,
+          prompt,
+          schema: FlatMindMapSchema,
+        }),
+        TIMEOUT_DURATION
+      );
+      
+      return response.object;
     };
 
     const flatMindMapData = await generateMindMap();
@@ -121,7 +147,10 @@ export async function POST(req: Request) {
     const validatedMindMapData = await validateMindMapData(nestedMindMapData);
 
     return new Response(JSON.stringify(validatedMindMapData), {
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache"
+      },
     });
   } catch (error) {
     console.error("API Error:", error);
@@ -130,7 +159,7 @@ export async function POST(req: Request) {
       subtopics: [
         {
           name: "Error",
-          details: "Failed to expand this topic. Please try again.",
+          details: "Request timeout. Please try again.",
           links: [],
           subtopics: [],
         },
