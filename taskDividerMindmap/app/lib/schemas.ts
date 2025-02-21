@@ -70,7 +70,7 @@ export const NodeDetailResponseSchema = z.object({
 export type NodeDetailResponse = z.infer<typeof NodeDetailResponseSchema>;
 
 
-export type RRArray = z.infer<typeof RRArraySchema>;
+
 
 // 기존 배열 스키마를 객체로 감싸기
 export const RRResponseSchema = z.object({

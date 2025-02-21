@@ -15,13 +15,12 @@ const USE_LOCAL_MODELS = process.env.NEXT_PUBLIC_USE_LOCAL_MODELS === "true";
 const LOCAL_MODEL = "llama3.1";
 const EXTERNAL_MODEL = "o3-mini-2025-01-31";
 
-const getModel = (useLocalModel: boolean) =>
-  useLocalModel
+const getModel = (useLocalModel: boolean) => {
+  const model = useLocalModel
     ? ollama(LOCAL_MODEL)
-    : openai(EXTERNAL_MODEL, { 
-        structuredOutputs: true,
-        completionParams: {}
-      });
+    : openai(EXTERNAL_MODEL, { structuredOutputs: true });
+  return model as ReturnType<typeof ollama>;
+};
 
 const getPrompt = (useLocalModel: boolean, topic: string, nodeId?: string) => {
   const basePrompt = useLocalModel ? defaultLocalPrompt : defaultExternalPrompt;
@@ -138,13 +137,10 @@ export async function POST(req: Request) {
   }
 }
 
-interface SubtopicMapItem {
-  name: string;
-  details: string;
-  links: Link[];
-  subtopics: Subtopic[];
+interface SubtopicMapItem extends Required<Omit<Subtopic, 'subtopics'>> {
   id: string;
   parentId: string | null;
+  subtopics: SubtopicMapItem[];
 }
 
 function reconstructNestedStructure(
@@ -160,10 +156,14 @@ function reconstructNestedStructure(
       subtopics: [],
       id: subtopic.id,
       parentId: subtopic.parentId,
+      taskDetail: '',
+      evaluationChecklist: [],
+      rrData: [],
+      status: 'not_started'
     });
   });
 
-  const rootNodes: Subtopic[] = [];
+  const rootNodes: SubtopicMapItem[] = [];
   flatSubtopics.forEach((subtopic) => {
     const node = subtopicMap.get(subtopic.id);
     if (!node) return;

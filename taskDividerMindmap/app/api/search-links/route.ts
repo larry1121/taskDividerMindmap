@@ -3,15 +3,13 @@ import { NextResponse } from 'next/server';
 interface GoogleSearchItem {
   title: string;
   link: string;
+  snippet?: string;
   pagemap?: {
     sitelinks?: unknown;
   };
 }
 
-interface SearchResult {
-  title: string;
-  type: string;
-  url: string;
+interface SearchResult extends GoogleSearchItem {
   relevanceScore: number;
 }
 

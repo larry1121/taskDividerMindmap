@@ -12,9 +12,10 @@ const LOCAL_MODEL = "llama3.1";
 const EXTERNAL_MODEL = "gpt-4o-mini-2024-07-18";
 
 function getModel(useLocalModel: boolean) {
-  return useLocalModel
+  const model = useLocalModel
     ? ollama(LOCAL_MODEL)
     : openai(EXTERNAL_MODEL, { structuredOutputs: true });
+  return model as ReturnType<typeof ollama>;
 }
 
 // 실제 API 라우트

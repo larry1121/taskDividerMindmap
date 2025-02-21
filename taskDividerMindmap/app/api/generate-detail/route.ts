@@ -1,23 +1,23 @@
 import { ollama } from "ollama-ai-provider";
 import { generateObject, generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
-import { detailAndChecklistPrompt } from "@/app/lib/prompts";  // Task 상세 + 평가기준 프롬프트
-import { NodeDetailResponseSchema } from "@/app/lib/schemas";  // Task 상세 + 체크리스트 응답 스키마
+import { detailAndChecklistPrompt } from "@/app/lib/prompts";
+import { NodeDetailResponseSchema } from "@/app/lib/schemas";
 
 const USE_LOCAL_MODELS = process.env.NEXT_PUBLIC_USE_LOCAL_MODELS === "true";
 const LOCAL_MODEL = "llama3.1";
 const EXTERNAL_MODEL = "gpt-4o-mini-2024-07-18";
 
-// 모델 선택 함수
+// 타입 단언을 사용하여 타입 충돌 해결
 function getModel(useLocalModel: boolean) {
-  return useLocalModel
+  const model = useLocalModel
     ? ollama(LOCAL_MODEL)
     : openai(EXTERNAL_MODEL, { structuredOutputs: true });
+  return model as ReturnType<typeof ollama>;
 }
 
-// POST 요청 처리
 export async function POST(req: Request) {
-    const { topic, nodeId } = await req.json();  // Topic (subtask/task) 받기
+  const { topic, nodeId } = await req.json();
 
   try {
     const model = getModel(USE_LOCAL_MODELS);
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     const response = await generateObject({
       model,
       prompt,
-      schema: NodeDetailResponseSchema,  // 세부사항과 평가기준 체크리스트 스키마
+      schema: NodeDetailResponseSchema,
     });
 
     return new Response(JSON.stringify(response.object), {
@@ -48,7 +48,6 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error("API Error:", error);
 
-    // 에러 발생 시 기본 응답
     const errorResponse = {
       taskDetail: "Failed to generate task details. Please try again.",
       evaluationChecklist: ["Failed to generate checklist."],

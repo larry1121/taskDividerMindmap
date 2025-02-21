@@ -33,7 +33,7 @@ import {
   HelpCircle,
   Layout,
 } from "lucide-react";
-import { convertToMarkdown, downloadJson, updateSubtopicData } from "@/lib/utils";
+import { convertToMarkdown, downloadJson } from "@/lib/utils";
 import MindMapLegend from "./MindMapLegend";
 import { motion, AnimatePresence } from "framer-motion";
 import Credits from "./Credits";
@@ -54,29 +54,46 @@ import {
 import NodeLoadingOverlay from "./NodeLoadingOverlay";
 import StatusUpdater from "./StatusUpdater";
 
-interface NodeData {
+interface RRItem {
+  role: string;
+  responsibility: string;
+  reason: string;
+}
+
+interface BaseMindMapData {
+  topic: string;
   name: string;
   details: string;
-  onClick: () => void;
-  onExpand: () => void;
-  isExpanded: boolean;
-  hasChildren: boolean;
-  isRoot: boolean;
-  onExpandMap: (nodeId: string) => Promise<void>;
-  nodeId: string;
-  onDelete: (nodeId: string) => void;
-  isExpanding?: boolean;
-  setExpandingNodes: React.Dispatch<React.SetStateAction<Set<string>>>;
+  links: Link[];
+  subtopics: Subtopic[];
   taskDetail?: string;
   evaluationChecklist?: string[];
-  rrData?: RRItem[];  // R&R 데이터 추가
+  rrData?: RRItem[];
   status?: 'not_started' | 'in_progress' | 'done' | 'skipped';
 }
 
+interface MindMapData extends BaseMindMapData {
+  nodeId?: string;
+}
+
 interface MindMapProps {
-  data: { topic: string; subtopics: Subtopic[] } | null;
+  data: MindMapData | null;
   onExpandMap: (nodeId: string) => Promise<void>;
   setData: React.Dispatch<React.SetStateAction<MindMapData | null>>;
+}
+
+interface SelectedSubtopic extends BaseMindMapData {
+  nodeId: string;
+}
+
+interface NodeData extends BaseMindMapData {
+  parentId: string | null;
+  isRoot: boolean;
+  isExpanded: boolean;
+  hasChildren: boolean;
+  onClick: () => void;
+  onExpand: () => void;
+  nodeId: string;
 }
 
 const NodeContent: React.FC<{
@@ -182,7 +199,7 @@ const LeafNode: React.FC<NodeProps> = ({ data }) => (
 
 /** mind map를 구성할 nodes/edges 배열 생성용 */
 const createNodesAndEdges = (
-  data: Subtopic,
+  data: BaseMindMapData,
   parentId: string | null,
   x: number,
   y: number,
@@ -210,7 +227,7 @@ const createNodesAndEdges = (
       parentId,
       isRoot: !parentId,
       isExpanded: expandedNodes.has(nodeId),
-      hasChildren: data.subtopics?.length > 0,
+      hasChildren: Boolean(data.subtopics?.length),
       onClick: () => {},
       onExpand: () => onExpand(nodeId, parentId),
       nodeId,
@@ -240,7 +257,7 @@ const createNodesAndEdges = (
     data.subtopics.forEach((subtopic, childIndex) => {
       const childY = startY + childIndex * childSpacing;
       const { nodes: childNodes, edges: childEdges } = createNodesAndEdges(
-        subtopic,
+        convertToBaseMindMapData(subtopic, data.topic),
         nodeId,
         xPos,
         childY,
@@ -259,8 +276,20 @@ const createNodesAndEdges = (
   return { nodes, edges };
 };
 
+// createNodesAndEdges 함수에서 subtopic을 BaseMindMapData로 변환하는 함수
+function convertToBaseMindMapData(subtopic: Subtopic, parentTopic: string): BaseMindMapData {
+  return {
+    ...subtopic,
+    topic: parentTopic,
+    name: subtopic.name,
+    details: subtopic.details,
+    links: subtopic.links || [],
+    subtopics: subtopic.subtopics || [],
+  };
+}
+
 const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap, setData }) => {
-  const [selectedSubtopic, setSelectedSubtopic] = useState<Subtopic | null>(null);
+  const [selectedSubtopic, setSelectedSubtopic] = useState<SelectedSubtopic | null>(null);
   const [isLoading] = useState(false);
   const [expandingNodes, setExpandingNodes] = useState<Set<string>>(new Set());
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
@@ -337,11 +366,20 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap, setData }) => {
         // data 상태 업데이트
         setData((prevData) => {
           if (!prevData) return null;
-          return updateSubtopicData(prevData, node.id, {
-            taskDetail,
-            evaluationChecklist,
-            links,
-          });
+          return {
+            ...prevData,
+            topic: prevData.topic,
+            name: prevData.name,
+            details: prevData.details,
+            links: prevData.links,
+            subtopics: prevData.subtopics.map(subtopic => ({
+              ...subtopic,
+              topic: prevData.topic,
+              name: subtopic.name,
+              details: subtopic.details,
+              links: subtopic.links || [],
+            })),
+          };
         });
 
         // selectedSubtopic 업데이트 추가
@@ -368,10 +406,19 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap, setData }) => {
 
   /** Sheet에 선택된 노드 정보를 표시하는 로직 */
   const openSheet = (node: Node) => {
-    const data = node.data as Subtopic;
-    setSelectedSubtopic(data);
-    setEditedName(data.name);
-    setEditedDetails(data.details);
+    const nodeData = node.data as NodeData;
+    setSelectedSubtopic({
+      ...nodeData,
+      nodeId: node.id,
+      topic: nodeData.topic,
+      name: nodeData.name,
+      details: nodeData.details,
+      links: nodeData.links,
+      subtopics: nodeData.subtopics,
+      rrData: nodeData.rrData,
+    });
+    setEditedName(nodeData.name);
+    setEditedDetails(nodeData.details);
     setIsEditing(false);
   };
 
@@ -450,7 +497,13 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap, setData }) => {
     if (!data) return;
 
     const { nodes: newNodes, edges: newEdges } = createNodesAndEdges(
-      { name: data.topic, details: "", links: [], subtopics: data.subtopics },
+      {
+        name: data.topic,
+        topic: data.topic,
+        details: "",
+        links: [],
+        subtopics: data.subtopics
+      },
       null,
       0,
       0,
@@ -648,9 +701,21 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap, setData }) => {
       // data 상태 업데이트 추가
       setData((prevData) => {
         if (!prevData) return null;
-        return updateSubtopicData(prevData, selectedSubtopic.nodeId, {
-          rrData,
-        });
+        return {
+          ...prevData,
+          topic: prevData.topic,
+          name: prevData.name,
+          details: prevData.details,
+          links: prevData.links,
+          subtopics: prevData.subtopics.map(subtopic => ({
+            ...subtopic,
+            topic: prevData.topic,
+            name: subtopic.name,
+            details: subtopic.details,
+            links: subtopic.links || [],
+            rrData,
+          })),
+        };
       });
 
       // selectedSubtopic 업데이트
@@ -664,6 +729,67 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap, setData }) => {
       setIsGeneratingRR(false);
     }
   }, [selectedSubtopic, setNodes, setData]);
+
+  const handleRRDataChange = (index: number, field: keyof RRItem, value: string) => {
+    if (!selectedSubtopic?.rrData) return;
+    
+    const newRRData = [...selectedSubtopic.rrData];
+    newRRData[index] = { ...newRRData[index], [field]: value };
+    
+    setSelectedSubtopic(prev => 
+      prev ? {
+        ...prev,
+        rrData: newRRData,
+        topic: prev.topic,
+        name: prev.name,
+        details: prev.details,
+        links: prev.links,
+        subtopics: prev.subtopics,
+        nodeId: prev.nodeId
+      } : null
+    );
+  };
+
+  const updateRRData = (newRRData: RRItem[]) => {
+    setSelectedSubtopic(prev => 
+      prev ? {
+        ...prev,
+        rrData: newRRData,
+        topic: prev.topic,
+        name: prev.name,
+        details: prev.details,
+        links: prev.links,
+        subtopics: prev.subtopics.map(subtopic => ({
+          ...subtopic,
+          topic: prev.topic,
+          name: subtopic.name,
+          details: subtopic.details,
+          links: subtopic.links || [],
+          rrData: newRRData
+        })),
+        nodeId: prev.nodeId
+      } : null
+    );
+
+    setData(prevData => {
+      if (!prevData || !selectedSubtopic) return prevData;
+      return {
+        ...prevData,
+        topic: prevData.topic,
+        name: prevData.name,
+        details: prevData.details,
+        links: prevData.links,
+        subtopics: prevData.subtopics.map(subtopic => ({
+          ...subtopic,
+          topic: prevData.topic,
+          name: subtopic.name,
+          details: subtopic.details,
+          links: subtopic.links || [],
+          rrData: newRRData
+        })),
+      };
+    });
+  };
 
   if (!data) return null;
 
@@ -881,46 +1007,26 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap, setData }) => {
                           <input
                             type="text"
                             value={item.role}
-                            onChange={(e) => {
-                              const newRRData = [...selectedSubtopic.rrData];
-                              newRRData[index] = { ...newRRData[index], role: e.target.value };
-                              setSelectedSubtopic(prev => 
-                                prev ? { ...prev, rrData: newRRData } : null
-                              );
-                            }}
+                            onChange={(e) => handleRRDataChange(index, 'role', e.target.value)}
                             className="w-full p-2 border rounded-md text-gray-700"
                             placeholder="역할"
                           />
                           <textarea
                             value={item.responsibility}
-                            onChange={(e) => {
-                              const newRRData = [...selectedSubtopic.rrData];
-                              newRRData[index] = { ...newRRData[index], responsibility: e.target.value };
-                              setSelectedSubtopic(prev => 
-                                prev ? { ...prev, rrData: newRRData } : null
-                              );
-                            }}
+                            onChange={(e) => handleRRDataChange(index, 'responsibility', e.target.value)}
                             className="w-full p-2 border rounded-md text-gray-700"
                             placeholder="책임"
                           />
                           <textarea
                             value={item.reason}
-                            onChange={(e) => {
-                              const newRRData = [...selectedSubtopic.rrData];
-                              newRRData[index] = { ...newRRData[index], reason: e.target.value };
-                              setSelectedSubtopic(prev => 
-                                prev ? { ...prev, rrData: newRRData } : null
-                              );
-                            }}
+                            onChange={(e) => handleRRDataChange(index, 'reason', e.target.value)}
                             className="w-full p-2 border rounded-md text-gray-700"
                             placeholder="이유"
                           />
                           <button
                             onClick={() => {
-                              const newRRData = selectedSubtopic.rrData.filter((_, i) => i !== index);
-                              setSelectedSubtopic(prev => 
-                                prev ? { ...prev, rrData: newRRData } : null
-                              );
+                              const newRRData = selectedSubtopic?.rrData?.filter((_, i) => i !== index) || [];
+                              updateRRData(newRRData);
                             }}
                             className="w-full p-2 text-red-500 hover:text-red-700"
                           >
@@ -930,13 +1036,8 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap, setData }) => {
                       ))}
                       <button
                         onClick={() => {
-                          const newRRData = [
-                            ...(selectedSubtopic.rrData || []),
-                            { role: "", responsibility: "", reason: "" }
-                          ];
-                          setSelectedSubtopic(prev => 
-                            prev ? { ...prev, rrData: newRRData } : null
-                          );
+                          const newRRData = [...(selectedSubtopic.rrData || []), { role: "", responsibility: "", reason: "" }];
+                          updateRRData(newRRData);
                         }}
                         className="w-full p-2 border border-dashed rounded-md text-gray-500 hover:text-gray-700 hover:border-gray-700"
                       >
@@ -1064,14 +1165,14 @@ const MindMap: React.FC<MindMapProps> = ({ data, onExpandMap, setData }) => {
                   
                   {selectedSubtopic.rrData ? (
                     <div className="space-y-4">
-                      {selectedSubtopic.rrData.map((item, idx) => (
+                      {selectedSubtopic.rrData.map((item, index) => (
                         <div 
-                          key={idx} 
-                          className="p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-200 transition-colors duration-200"
+                          key={index} 
+                          className="p-4 bg-white rounded-lg border border-gray-200"
                         >
                           <div className="flex items-start gap-3">
                             <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                              <span className="text-blue-600 text-sm font-semibold">{idx + 1}</span>
+                              <span className="text-blue-600 text-sm font-semibold">{index + 1}</span>
                             </div>
                             <div className="space-y-2 flex-grow">
                               <h4 className="font-semibold text-blue-700">{item.role}</h4>
